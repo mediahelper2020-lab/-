@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>인지활동형 프로그램 추천 & 게임</title>
+  <style>
+    :root {
+      font-family: "Pretendard", "Noto Sans KR", sans-serif;
+      color: #1f2937;
+      background: #f3f4f6;
+    }
+    body { margin: 0; }
+    .container {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 24px 16px 60px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    h1 { margin-top: 0; font-size: 1.8rem; }
+    h2 { margin: 0 0 12px; font-size: 1.25rem; }
+    .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px; }
+    label { font-weight: 600; font-size: 0.95rem; display: block; margin-bottom: 6px; }
+    input, select, button {
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 0.95rem;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    button { cursor: pointer; border: none; font-weight: 700; }
+    .primary { background: #2563eb; color: #fff; }
+    .primary:hover { background: #1d4ed8; }
+    .secondary { background: #e5e7eb; }
+    .recommendation { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+    .recommendation p { margin: 4px 0 10px; color: #4b5563; }
+    .hidden { display: none; }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip { background: #eff6ff; color: #1e40af; padding: 4px 8px; border-radius: 999px; font-size: 0.8rem; }
+    .status { margin-top: 8px; font-weight: 600; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .tile {
+      aspect-ratio: 1;
+      border-radius: 10px;
+      border: 1px solid #bfdbfe;
+      background: #dbeafe;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      cursor: pointer;
+      user-select: none;
+      font-weight: 700;
+    }
+    .tile.open, .tile.matched { background: #fff; }
+    .tile.matched { border-color: #22c55e; color: #15803d; }
+    .sequence-buttons button { width: auto; min-width: 80px; margin-right: 8px; margin-bottom: 8px; }
+    .word-options button { margin: 8px 8px 0 0; width: auto; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>어르신 인지활동형 프로그램 도우미</h1>
+      <p>어르신의 상태를 입력하면 맞춤 활동을 추천하고, 선택 즉시 활동 게임을 실행합니다.</p>
+      <div class="row">
+        <div>
+          <label for="age">연령</label>
+          <input id="age" type="number" min="60" max="110" placeholder="예: 78" />
+        </div>
+        <div>
+          <label for="memory">기억력 상태</label>
+          <select id="memory">
+            <option value="low">저하</option>
+            <option value="mid" selected>보통</option>
+            <option value="high">양호</option>
+          </select>
+        </div>
+        <div>
+          <label for="vision">시각 상태</label>
+          <select id="vision">
+            <option value="normal" selected>양호</option>
+            <option value="weak">약함</option>
+          </select>
+        </div>
+        <div>
+          <label for="mobility">손 움직임</label>
+          <select id="mobility">
+            <option value="good" selected>자유로움</option>
+            <option value="limited">제한적</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" style="grid-template-columns: 1fr;">
+        <div>
+          <label for="interest">관심 주제</label>
+          <input id="interest" placeholder="예: 동물, 음식, 추억" />
+        </div>
+      </div>
+      <button class="primary" id="recommendBtn">프로그램 추천받기</button>
+    </div>
+
+    <div id="recommendations" class="card hidden">
+      <h2>추천 프로그램</h2>
+      <div id="recommendList"></div>
+    </div>
+
+    <div id="gameArea" class="card hidden">
+      <h2 id="gameTitle">게임</h2>
+      <div class="chips" id="gameTags"></div>
+      <div id="gameContent"></div>
+    </div>
+  </div>
+
+  <script>
+    const programCatalog = [
+      {
+        id: "memory-cards",
+        name: "그림 짝 맞추기",
+        tags: ["기억력", "주의집중"],
+        desc: "카드를 뒤집어 같은 그림을 찾아 기억력과 집중력을 자극합니다.",
+        fit: (p) => (p.memory !== "high" ? 3 : 2) + (p.vision === "normal" ? 1 : 0),
+      },
+      {
+        id: "sequence",
+        name: "순서 기억하기",
+        tags: ["작업기억", "인지유연성"],
+        desc: "제시된 숫자 순서를 보고 같은 순서대로 눌러봅니다.",
+        fit: (p) => (p.memory === "low" ? 4 : 2) + (p.mobility === "limited" ? 1 : 0),
+      },
+      {
+        id: "word-choice",
+        name: "단어 연상 고르기",
+        tags: ["언어", "의미기억"],
+        desc: "제시된 주제와 가장 관련 있는 단어를 고르는 활동입니다.",
+        fit: (p) => (p.vision === "weak" ? 4 : 2) + (p.age >= 80 ? 1 : 0),
+      },
+    ];
+
+    const el = {
+      age: document.getElementById("age"),
+      memory: document.getElementById("memory"),
+      vision: document.getElementById("vision"),
+      mobility: document.getElementById("mobility"),
+      interest: document.getElementById("interest"),
+      recommendBtn: document.getElementById("recommendBtn"),
+      recommendations: document.getElementById("recommendations"),
+      recommendList: document.getElementById("recommendList"),
+      gameArea: document.getElementById("gameArea"),
+      gameTitle: document.getElementById("gameTitle"),
+      gameTags: document.getElementById("gameTags"),
+      gameContent: document.getElementById("gameContent"),
+    };
+
+    el.recommendBtn.addEventListener("click", () => {
+      const profile = {
+        age: Number(el.age.value || 75),
+        memory: el.memory.value,
+        vision: el.vision.value,
+        mobility: el.mobility.value,
+        interest: (el.interest.value || "추억").trim(),
+      };
+
+      const ranked = [...programCatalog]
+        .map((program) => ({ ...program, score: program.fit(profile) }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3);
+
+      el.recommendList.innerHTML = "";
+      ranked.forEach((program, idx) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "recommendation";
+        wrapper.innerHTML = `
+          <strong>${idx + 1}. ${program.name}</strong>
+          <p>${program.desc}</p>
+          <div class="chips">${program.tags.map((t) => `<span class="chip">${t}</span>`).join("")}</div>
+          <button class="primary" data-program="${program.id}" style="margin-top:10px;">이 프로그램 시작하기</button>
+        `;
+        el.recommendList.appendChild(wrapper);
+      });
+
+      el.recommendations.classList.remove("hidden");
+    });
+
+    el.recommendList.addEventListener("click", (event) => {
+      const btn = event.target.closest("button[data-program]");
+      if (!btn) return;
+      const selected = programCatalog.find((p) => p.id === btn.dataset.program);
+      if (selected) startGame(selected);
+    });
+
+    function startGame(program) {
+      el.gameArea.classList.remove("hidden");
+      el.gameTitle.textContent = `${program.name} 게임`;
+      el.gameTags.innerHTML = program.tags.map((tag) => `<span class="chip">${tag}</span>`).join("");
+      el.gameContent.innerHTML = "";
+
+      if (program.id === "memory-cards") buildMemoryGame();
+      if (program.id === "sequence") buildSequenceGame();
+      if (program.id === "word-choice") buildWordChoiceGame();
+    }
+
+    function buildMemoryGame() {
+      const symbols = ["🍎", "🐶", "🌸", "🚗", "🍎", "🐶", "🌸", "🚗"]
+        .sort(() => Math.random() - 0.5);
+      let opened = [];
+      let lock = false;
+      let matchedCount = 0;
+
+      const status = document.createElement("div");
+      status.className = "status";
+      status.textContent = "같은 그림 4쌍을 모두 찾아보세요.";
+
+      const grid = document.createElement("div");
+      grid.className = "grid";
+
+      symbols.forEach((symbol, index) => {
+        const tile = document.createElement("button");
+        tile.className = "tile";
+        tile.textContent = "?";
+        tile.addEventListener("click", () => {
+          if (lock || tile.classList.contains("open") || tile.classList.contains("matched")) return;
+          tile.classList.add("open");
+          tile.textContent = symbol;
+          opened.push({ tile, symbol, index });
+
+          if (opened.length === 2) {
+            lock = true;
+            const [a, b] = opened;
+            if (a.symbol === b.symbol) {
+              a.tile.classList.add("matched");
+              b.tile.classList.add("matched");
+              matchedCount += 1;
+              status.textContent = `잘하셨어요! ${matchedCount}/4 쌍 성공`;
+              opened = [];
+              lock = false;
+              if (matchedCount === 4) status.textContent = "완료! 기억력 훈련을 성공적으로 마쳤습니다.";
+            } else {
+              setTimeout(() => {
+                a.tile.classList.remove("open");
+                b.tile.classList.remove("open");
+                a.tile.textContent = "?";
+                b.tile.textContent = "?";
+                opened = [];
+                lock = false;
+              }, 700);
+            }
+          }
+        });
+        grid.appendChild(tile);
+      });
+
+      el.gameContent.append(status, grid);
+    }
+
+    function buildSequenceGame() {
+      const sequence = Array.from({ length: 4 }, () => Math.ceil(Math.random() * 4));
+      const panel = document.createElement("div");
+      const show = document.createElement("p");
+      const status = document.createElement("div");
+      status.className = "status";
+      let input = [];
+
+      show.innerHTML = `순서 기억: <strong>${sequence.join(" - ")}</strong> (5초 후 숨김)`;
+      setTimeout(() => {
+        show.textContent = "이제 기억한 순서를 눌러보세요.";
+      }, 5000);
+
+      const btnWrap = document.createElement("div");
+      btnWrap.className = "sequence-buttons";
+      [1, 2, 3, 4].forEach((n) => {
+        const btn = document.createElement("button");
+        btn.className = "secondary";
+        btn.textContent = `${n}`;
+        btn.addEventListener("click", () => {
+          input.push(n);
+          status.textContent = `입력: ${input.join(" - ")}`;
+          if (input.length === sequence.length) {
+            const ok = input.every((v, i) => v === sequence[i]);
+            status.textContent = ok ? "정답입니다! 훌륭해요." : `아쉬워요. 정답은 ${sequence.join(" - ")} 입니다.`;
+          }
+        });
+        btnWrap.appendChild(btn);
+      });
+
+      const reset = document.createElement("button");
+      reset.className = "primary";
+      reset.textContent = "다시 도전";
+      reset.style.marginTop = "10px";
+      reset.addEventListener("click", () => buildSequenceGame());
+
+      panel.append(show, btnWrap, status, reset);
+      el.gameContent.innerHTML = "";
+      el.gameContent.append(panel);
+    }
+
+    function buildWordChoiceGame() {
+      const topic = (el.interest.value || "음식").trim();
+      const sets = {
+        동물: { q: "동물과 가장 관련 있는 단어는?", a: "사자", opts: ["사자", "의자", "시계"] },
+        음식: { q: "음식과 가장 관련 있는 단어는?", a: "국수", opts: ["국수", "연필", "바다"] },
+        추억: { q: "추억과 가까운 단어는?", a: "사진", opts: ["사진", "바퀴", "창문"] },
+      };
+      const picked = sets[topic] || sets.추억;
+
+      const question = document.createElement("p");
+      question.innerHTML = `<strong>주제: ${topic}</strong><br>${picked.q}`;
+
+      const status = document.createElement("div");
+      status.className = "status";
+
+      const optionWrap = document.createElement("div");
+      optionWrap.className = "word-options";
+
+      picked.opts
+        .sort(() => Math.random() - 0.5)
+        .forEach((word) => {
+          const btn = document.createElement("button");
+          btn.className = "secondary";
+          btn.textContent = word;
+          btn.addEventListener("click", () => {
+            status.textContent = word === picked.a ? "정답! 의미 기억 훈련 완료." : "괜찮아요, 다시 생각해봐요.";
+          });
+          optionWrap.appendChild(btn);
+        });
+
+      el.gameContent.innerHTML = "";
+      el.gameContent.append(question, optionWrap, status);
+    }
+  </script>
+</body>
+</html>
