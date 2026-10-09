@@ -1,0 +1,16 @@
+{
+  "name": "webapp-security-tester",
+  "version": "1.0.0",
+  "description": "바이브코딩 웹앱 보안 자가진단 도구 — 본인 소유 사이트의 공개된 코드/설정에서 실수로 노출된 API 키, Supabase 설정, 보안 헤더 등을 점검합니다.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2",
+    "undici": "^6.21.1"
+  }
+}

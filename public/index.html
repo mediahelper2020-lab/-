@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>웹앱 보안 자가진단</title>
+<style>
+  :root {
+    --bg: #0f1420; --card: #1a2133; --card2: #222b42; --line: #2f3a55;
+    --text: #e8edf7; --muted: #9aa7c2; --accent: #5b8cff;
+    --crit: #ff5d6c; --high: #ff914d; --med: #ffcc4d; --low: #6fd3c7; --info: #8ea2c9;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Pretendard", -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 26px; margin: 0 0 6px; }
+  .sub { color: var(--muted); margin: 0 0 24px; font-size: 15px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 18px; }
+  label { display: block; font-weight: 600; margin-bottom: 8px; }
+  input[type=url] { width: 100%; padding: 13px 14px; font-size: 16px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--card2); color: var(--text); }
+  input[type=url]:focus { outline: none; border-color: var(--accent); }
+  .consent { display: flex; gap: 10px; align-items: flex-start; margin: 16px 0; font-size: 14px; color: var(--muted); }
+  .consent input { margin-top: 3px; width: 18px; height: 18px; flex-shrink: 0; }
+  button { background: var(--accent); color: #fff; border: 0; padding: 13px 22px; font-size: 16px;
+    font-weight: 700; border-radius: 10px; cursor: pointer; width: 100%; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .notice { background: #1e2740; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+    font-size: 13px; color: var(--muted); margin-top: 14px; }
+  .notice b { color: var(--text); }
+  .summary { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+  .pill { flex: 1; min-width: 90px; text-align: center; padding: 12px; border-radius: 12px; background: var(--card2);
+    border: 1px solid var(--line); }
+  .pill .n { font-size: 24px; font-weight: 800; display: block; }
+  .pill .l { font-size: 12px; color: var(--muted); }
+  .finding { border-left: 4px solid var(--info); background: var(--card2); border-radius: 0 10px 10px 0;
+    padding: 14px 16px; margin-bottom: 12px; }
+  .finding.critical { border-color: var(--crit); }
+  .finding.high { border-color: var(--high); }
+  .finding.medium { border-color: var(--med); }
+  .finding.low { border-color: var(--low); }
+  .finding.info { border-color: var(--info); }
+  .ftitle { font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .badge { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 20px; color: #0f1420; }
+  .badge.critical { background: var(--crit); color:#fff; } .badge.high { background: var(--high); }
+  .badge.medium { background: var(--med); } .badge.low { background: var(--low); } .badge.info { background: var(--info); }
+  .fdetail { font-size: 14px; margin: 4px 0; }
+  .fhowto { font-size: 13px; color: var(--low); background: #16221f; border-radius: 8px; padding: 9px 11px; margin-top: 8px; }
+  .fhowto b { color: #a8f0e4; }
+  .fmeta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .evidence { font-family: ui-monospace, monospace; font-size: 12px; background: #11182a; padding: 2px 6px; border-radius: 5px; color: #ffcc4d; }
+  .spinner { display: inline-block; width: 18px; height: 18px; border: 3px solid rgba(255,255,255,.3);
+    border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -3px; margin-right: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .err { background: #3a1c22; border: 1px solid var(--crit); color: #ffb3bb; padding: 12px 14px; border-radius: 10px; }
+  .ok { text-align: center; padding: 20px; color: var(--low); font-weight: 600; }
+  .meta-line { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+  .foot { text-align:center; color:var(--muted); font-size:12px; margin-top:30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🛡️ 웹앱 보안 자가진단</h1>
+  <p class="sub">바이브코딩으로 만든 <b>내 웹앱</b>의 주소를 넣으면, 공개된 코드/설정에서 실수로 노출된 API 키·Supabase 설정·보안 헤더 등을 점검해 드립니다.</p>
+
+  <div class="card">
+    <label for="url">점검할 웹앱 주소 (URL)</label>
+    <input id="url" type="url" placeholder="https://my-app.vercel.app" autocomplete="off" />
+    <div class="consent">
+      <input type="checkbox" id="consent" />
+      <label for="consent" style="font-weight:400; margin:0;">이 사이트는 <b>제가 소유</b>하거나 점검 권한이 있으며, 보안 개선 목적의 자가진단임을 확인합니다.</label>
+    </div>
+    <button id="run" disabled>보안 점검 시작</button>
+    <div class="notice">
+      <b>이 도구가 하는 일:</b> 브라우저가 어차피 내려받는 공개 HTML/JS와 응답 헤더만 읽어 분석합니다(수동 점검). 공격이나 데이터 변경은 하지 않습니다.<br>
+      <b>하지 않는 일:</b> 타인 사이트 무단 점검, 데이터 덤프, 침투 공격. 반드시 <b>본인 소유 사이트</b>에만 사용하세요.
+    </div>
+  </div>
+
+  <div id="result"></div>
+  <p class="foot">교육용 방어적 자가진단 도구 · 결과는 참고용이며 완전한 보안을 보장하지 않습니다.</p>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const urlEl = $("#url"), consentEl = $("#consent"), runEl = $("#run"), resultEl = $("#result");
+
+function updateBtn() { runEl.disabled = !(consentEl.checked && urlEl.value.trim()); }
+consentEl.addEventListener("change", updateBtn);
+urlEl.addEventListener("input", updateBtn);
+urlEl.addEventListener("keydown", (e) => { if (e.key === "Enter" && !runEl.disabled) run(); });
+runEl.addEventListener("click", run);
+
+const SEV_LABEL = { critical: "매우위험", high: "위험", medium: "주의", low: "참고", info: "정보" };
+
+async function run() {
+  runEl.disabled = true;
+  resultEl.innerHTML = '<div class="card"><span class="spinner"></span>점검 중입니다… 사이트 크기에 따라 10~20초 걸릴 수 있어요.</div>';
+  try {
+    const res = await fetch("/api/scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: urlEl.value.trim(), authorized: consentEl.checked }),
+    });
+    const data = await res.json();
+    if (data.error) { resultEl.innerHTML = '<div class="err">⚠️ ' + esc(data.error) + '</div>'; return; }
+    render(data);
+  } catch (e) {
+    resultEl.innerHTML = '<div class="err">⚠️ 요청 실패: ' + esc(String(e)) + '</div>';
+  } finally {
+    updateBtn();
+  }
+}
+
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function render(data) {
+  const s = data.summary;
+  let html = "";
+  html += '<div class="meta-line">점검 대상: ' + esc(data.meta.finalUrl || data.meta.target)
+    + ' · HTTP ' + esc(String(data.meta.status)) + ' · 리소스 ' + data.meta.resources.length + '개 분석 · ' + esc(data.meta.scannedAt) + '</div>';
+  html += '<div class="summary">';
+  for (const k of ["critical","high","medium","low","info"]) {
+    html += '<div class="pill"><span class="n" style="color:var(--' + (k==='critical'?'crit':k==='high'?'high':k==='medium'?'med':k) + ')">' + s[k] + '</span><span class="l">' + SEV_LABEL[k] + '</span></div>';
+  }
+  html += '</div>';
+
+  if (!data.findings.length) {
+    html += '<div class="ok">✅ 뚜렷한 문제를 찾지 못했습니다. 그래도 Supabase RLS·서버 측 설정은 대시보드에서 직접 확인하세요.</div>';
+  }
+  for (const f of data.findings) {
+    html += '<div class="finding ' + f.severity + '">';
+    html += '<div class="ftitle"><span class="badge ' + f.severity + '">' + SEV_LABEL[f.severity] + '</span>' + esc(f.title) + '</div>';
+    html += '<div class="fdetail">' + esc(f.detail) + '</div>';
+    if (f.evidence) html += '<div class="fmeta">발견 값: <span class="evidence">' + esc(f.evidence) + '</span></div>';
+    if (f.source) html += '<div class="fmeta">위치: ' + esc(f.source) + '</div>';
+    if (f.howto) html += '<div class="fhowto"><b>조치방법 ▸</b> ' + esc(f.howto) + '</div>';
+    html += '</div>';
+  }
+  resultEl.innerHTML = html;
+}
+</script>
+</body>
+</html>
