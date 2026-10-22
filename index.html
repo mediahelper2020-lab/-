@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>평생과정설계 도우미</title>
+  <meta name="description" content="발달장애인 평생과정설계(PPP) 자기소개서·미래설계 실천계획서 작성 웹앱 (무료 AI 지원)">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">🌱 <b>평생과정설계 도우미</b><small>PPP 자기소개서 · 실천계획서</small></div>
+    <div class="case-bar">
+      <label for="case-select" class="sr">참여자 선택</label>
+      <select id="case-select"></select>
+      <button id="add-case" class="primary small">+ 새 참여자</button>
+      <button id="open-data" class="ghost small">데이터 관리</button>
+      <button id="open-settings" class="ghost small">⚙ AI 설정 <span id="ai-status"></span></button>
+    </div>
+    <nav class="tabs">
+      <button class="tab" data-tab="process">① 진행과정</button>
+      <button class="tab" data-tab="intro">② 자기소개서</button>
+      <button class="tab" data-tab="plan">③ 실천계획서</button>
+      <button class="tab" data-tab="eval">④ 평가</button>
+      <button class="tab" data-tab="guide">사용안내</button>
+    </nav>
+  </header>
+
+  <main id="main"></main>
+
+  <dialog id="modal">
+    <h3 id="modal-title"></h3>
+    <div id="modal-body"></div>
+    <div id="modal-foot"></div>
+  </dialog>
+  <div id="flash" role="status"></div>
+
+  <script src="js/schema.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
