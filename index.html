@@ -2313,7 +2313,7 @@ function explain(e){
  if(/email.*not.*confirm/i.test(m)||code==='email_not_confirmed')return '<b>이메일 확인이 안 된 계정이다.</b><br>Supabase → Authentication → Users에서 이 계정을 지우고 <b>Auto Confirm User</b>를 체크해서 다시 만든다. (또는 메일함의 확인 링크를 누른다)';
  if(/invalid login|invalid_credentials/i.test(m)||code==='invalid_credentials')return `<b>이메일 또는 비밀번호가 맞지 않다.</b><br>비밀번호가 맞다면, 계정을 만든 Supabase 프로젝트가 <b>${esc(proj)}</b>인지 확인한다. 다른 프로젝트에 만든 계정으로는 로그인할 수 없다.`;
  if(/invalid api key|no api key|apikey|jwt|unauthor/i.test(m))return '<b>Supabase 키가 맞지 않다.</b><br>Vercel의 SUPABASE_ANON_KEY에 같은 프로젝트의 <b>anon public</b> 키(eyJ…)를 넣고 Redeploy 한다.';
- if(/fetch|network|load failed/i.test(m))return '<b>Supabase에 연결하지 못했다.</b><br>SUPABASE_URL 주소가 맞는지, 인터넷이 연결되었는지 확인한다.';
+ if(/fetch|network|load failed/i.test(m))return `<b>Supabase에 연결하지 못했다.</b><br>지금 연결하려는 주소: <code>${esc(cloud.config?.supabaseUrl||'(없음)')}</code><br>Supabase → Project Settings → API(Data API)의 <b>Project URL</b>(https://○○○.supabase.co)과 같은지 확인한다. 프로젝트가 일시중지(Paused)된 경우 Supabase 대시보드에서 <b>Restore</b>를 누른다.`;
  if(/rate limit|too many/i.test(m))return '<b>시도가 너무 많았다.</b> 몇 분 뒤 다시 한다.';
  if(/signups? not allowed|signup.*disabled/i.test(m))return '<b>직접 가입이 꺼져 있다.</b> 관리자가 Supabase에서 계정을 만들어 준다.';
  return '로그인하지 못했다: '+esc(m);

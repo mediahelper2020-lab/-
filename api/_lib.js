@@ -26,8 +26,18 @@ export function models() {
   return list.filter((m) => keys[m.provider]).map((m) => ({ ...m, id: `${m.provider}:${m.model}` }));
 }
 
+// 흔한 입력 실수를 바로잡는다: 대시보드 주소, 프로젝트 ID만 입력, https 누락, /rest/v1 등 꼬리 경로, 따옴표.
+export function normalizeSupabaseUrl(raw) {
+  let v = String(raw || '').trim().replace(/^["']|["']$/g, '').trim();
+  if (!v) return '';
+  const dash = v.match(/supabase\.com\/dashboard\/project\/([a-z0-9]{10,})/i);
+  if (dash) return `https://${dash[1].toLowerCase()}.supabase.co`;
+  if (/^[a-z0-9]{15,}$/i.test(v)) return `https://${v.toLowerCase()}.supabase.co`;
+  if (!/^https?:\/\//i.test(v)) v = 'https://' + v;
+  try { const u = new URL(v); return `${u.protocol}//${u.host}`; } catch (_) { return v; }
+}
 export function supabaseConfig() {
-  return { url: env('SUPABASE_URL').replace(/\/$/, ''), anonKey: env('SUPABASE_ANON_KEY') };
+  return { url: normalizeSupabaseUrl(env('SUPABASE_URL')), anonKey: env('SUPABASE_ANON_KEY').replace(/^["']|["']$/g, '').trim() };
 }
 
 // Supabase 로그인 토큰을 확인한다. ALLOWED_EMAILS(쉼표 구분, "@기관도메인" 가능)가 있으면 그 사람만 허용한다.
