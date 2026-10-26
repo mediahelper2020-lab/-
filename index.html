@@ -605,6 +605,20 @@ body.followup-mode .layout{display:block}
  .cl-out{border:1px solid #cfd8c8;background:#fff;border-radius:99px;padding:3px 9px;font-size:11px;font-weight:700;color:#3d5746}
  @media(max-width:700px){.cl-chip .cl-text{display:none}}
 }
+
+/* ===== 전체화면 · 서술형 초안 ===== */
+@media screen{
+ .vl-wrap:fullscreen,.vl-wrap:-webkit-full-screen{border:0;border-radius:0;width:100vw;height:100vh;background:#cfe6f1}
+ .vl-wrap.vl-pseudo-fs{position:fixed;inset:0;z-index:1500;border:0;border-radius:0;width:100vw;height:100dvh}
+ body.vl-fs-lock{overflow:hidden}
+ .vl-wrap:fullscreen .vl-stage,.vl-wrap:-webkit-full-screen .vl-stage,.vl-wrap.vl-pseudo-fs .vl-stage{aspect-ratio:auto!important;width:100%;height:100%;min-height:0;min-width:0}
+ .vl-fs-exit{position:absolute;right:16px;top:16px;z-index:20;border:0;border-radius:99px;background:#244f40;color:#fff;font-weight:800;padding:10px 16px;box-shadow:0 6px 18px #0003;cursor:pointer}
+ .narrative-box>h3{background:linear-gradient(90deg,#f4f1fb,#fbf7ee)!important;color:#4b3f7a!important}
+ .narrative-box textarea{min-height:170px}
+ .nv-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:10px}
+ .nv-model{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:800;color:#5d5675}
+ .nv-model select{min-width:230px;border:1px solid #d8d2e6;border-radius:10px;padding:9px 10px;background:#fff;font:inherit;font-size:14px}
+}
 </style>
 <script type="importmap" id="village-importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
 </head>
@@ -1751,7 +1765,7 @@ function ensureVillage(){
  if(!box){
   box=h(`<section id="avatarVillage" aria-label="아바타 마을"><div class="vl-hud"><div><span class="home-kicker">OUR VILLAGE · 평생과정설계</span><h1>우리 마을에 오신 것을 환영해요</h1><p>캐릭터를 누르면 그 사람의 진행 상황과 기록을 모두 볼 수 있다. 캐릭터는 지금 단계의 장소에서 지낸다.</p></div><div class="vl-btns"><span class="vl-count"></span><button type="button" class="secondary" data-act="ai">🤖 AI 모델</button><button type="button" class="primary" data-act="add">＋ 대상자 등록</button></div></div>
   <div class="vl-wrap"><div class="vl-stage" role="group" aria-label="마을 지도"></div></div>
-  <div class="vl-tools"><input type="search" placeholder="이름으로 찾기" aria-label="마을에서 이름 찾기"><label><input type="checkbox" data-act="bubbles"> 말풍선 항상 보기</label><button type="button" class="secondary" data-act="spin" style="padding:6px 12px">🔄 천천히 돌아보기</button><button type="button" class="secondary" data-act="reset" style="padding:6px 12px">⌂ 처음 시점</button><span style="margin-left:auto">팻말을 누르면 그 장소에 있는 사람만 표시한다</span></div></section>`);
+  <div class="vl-tools"><input type="search" placeholder="이름으로 찾기" aria-label="마을에서 이름 찾기"><label><input type="checkbox" data-act="bubbles"> 말풍선 항상 보기</label><button type="button" class="secondary" data-act="spin" style="padding:6px 12px">🔄 천천히 돌아보기</button><button type="button" class="secondary" data-act="reset" style="padding:6px 12px">⌂ 처음 시점</button><button type="button" class="primary" data-act="fs" style="padding:6px 12px">⛶ 전체화면</button><span style="margin-left:auto">팻말을 누르면 그 장소에 있는 사람만 표시한다</span></div></section>`);
   home.prepend(box);
   const stage=$('.vl-stage',box);buildStage(stage);
   box.addEventListener('click',ev=>{
@@ -1760,6 +1774,7 @@ function ensureVillage(){
    if(act==='ai')AI.openSettings();
    if(act==='spin'&&village.v3){village.spin=!village.spin;village.v3.spin(village.spin);}
    if(act==='reset'&&village.v3)village.v3.resetView();
+   if(act==='fs'||act==='fs-exit')toggleFullscreen(box);
    const sign=ev.target.closest('.vl-sign');
    if(sign&&village.mode==='2d'){const z=Number(sign.dataset.zone);village.zoneFilter=village.zoneFilter===z?-1:z;applyFilter();}
    const ch=ev.target.closest('.vchar');if(ch)openCard(ch.dataset.name);
@@ -2047,8 +2062,8 @@ async function pick(title){
  });
 }
 /* 실행: prompt → 모델 선택 → 결과 미리보기(render) → 적용 */
-async function run({title,prompt,render,apply,applyLabel='적용하기',extraButtons=''}){
- const model=await pick(title);if(!model)return;
+async function run({title,prompt,render,apply,applyLabel='적용하기',extraButtons='',model:fixed=null}){
+ const model=fixed||await pick(title);if(!model)return;
  if(!runDlg.open)runDlg.showModal();
  runDlg.innerHTML=`<h2>${e(title)}</h2><div class="ai-status"><span class="ai-spin"></span>${e(model.label)}이(가) 작성하는 중…</div>`;
  let text;
@@ -2065,7 +2080,7 @@ async function run({title,prompt,render,apply,applyLabel='적용하기',extraBut
   if(ev.target===runDlg||ev.target.closest('[data-c]')){runDlg.close();return;}
   if(ev.target.closest('[data-again]')){runDlg.close();run({title,prompt,render,apply,applyLabel,extraButtons});return;}
   const b=ev.target.closest('[data-apply],[data-apply2]');
-  if(b&&apply){if(apply(view,b.hasAttribute('data-apply2')?'fill':'all',runDlg)!==false){runDlg.close();toast('AI 작성 내용을 넣었다. 꼭 읽고 고친다.');}}
+  if(b&&apply){const r=apply(view,b.hasAttribute('data-apply2')?'fill':'all',runDlg);if(r!==false){runDlg.close();if(r!=='quiet')toast('AI 작성 내용을 넣었다. 꼭 읽고 고친다.');}}
  };
 }
 function parseJSON(text){const m=String(text).match(/\{[\s\S]*\}/);if(!m)throw new Error('JSON 없음');return JSON.parse(m[0]);}
@@ -2074,7 +2089,7 @@ function parseJSON(text){const m=String(text).match(/\{[\s\S]*\}/);if(!m)throw n
 const PRIVATE=new Set(['common_client','common_date','common_manager','name','phone','emergency','address','birth','writer','supporter','people','intro_date','ai_prompt','record_date','age_years']);
 const IND=['청소와 정리하기','빨래하기','쓰레기 버리기','음식 만들기','단정하게 옷 입기','멋내기','고장난 물건 대처하기','사람들과 대화하기','친구들과 친하게 지내기','이웃과 함께 살기','가족과 친하게 지내기','지역사회시설 이용하기','휴대전화·메신저 사용하기','원하는 곳으로 외출하기'];
 const LBL={oneword:'“나”를 한마디로',gender:'성별',lifecycle:'생애주기',disability_type:'장애유형',disability_feature:'장애특성',activity_support:'활동지원서비스',vision:'시력',body:'키/몸무게',religion:'종교 및 종교활동',nickname:'별명',personality:'성격 및 기타',goodat:'내가 잘하는 것',memory:'좋아하는 이야기·추억',liked_me:'사람들이 좋아하는 나의 모습',likes:'좋아하는 것',dislikes:'싫어하는 것·어렵게 하는 것',comfort:'나를 편안하게 하는 방법',soothe:'위로를 주는 방법',events:'기념하는 행사',friends:'친구·지인과 함께 하는 방법',orgs:'소속 기관·활동',daily:'하루 일과',routine:'나만의 규칙(루틴)',weekly:'주간 활동',happiness:'내가 생각하는 행복',dream:'나의 꿈',desired_daily:'기대하는 일상',ai_analysis:'기존 상담 분석',ai_review:'담당자 검토',
- plan_dream:'꿈과 희망',mid_goal:'중장기목표',important:'내가 중요하게 생각하는 것',need:'나에게 필요한 것',success:'성공경험',overall:'종합기록'};
+ narrative:'서술형 기록',plan_dream:'꿈과 희망',mid_goal:'중장기목표',important:'내가 중요하게 생각하는 것',need:'나에게 필요한 것',success:'성공경험',overall:'종합기록'};
 const PAT={domain_now:'현재 경험·상황',domain_future:'희망하는 미래',domain_help:'필요한 도움',hope:'희망하는 미래',area:'영역',short:'단기목표',action:'실천계획',note:'비고',ind:'',date:'실천일/기간',status:'진행상태',supporter:'함께한 사람',actual:'실제로 실행한 내용',voice:'당사자의 의견과 반응',support:'어려움과 제공한 지원',next:'다음 실천',implementation:'실천 여부',fit:'현재 삶과 목표 확인',evidence:'실천 근거',change:'삶·선택·만족도 변화',environment:'가족·환경 변화',decision:'유지·조정 방향',followup:'다음 계획'};
 const EMPTYV=new Set(['','미시작','미확인','미정']);
 function label(k){const m=k.match(/^(.*)_(\d+)$/);if(m&&m[1]==='ind')return IND[m[2]]||k;if(m&&PAT[m[1]]!==undefined&&domains[m[2]])return domains[m[2]]+' · '+PAT[m[1]];return LBL[k]||null;}
@@ -2138,7 +2153,7 @@ ${now||'(없음)'}
    const rows=keys.filter(k=>has(obj[k])).map(k=>`<tr><th>${e(label(k)||k)}</th><td class="old">${e(domField(k)?.value||'')||'<i>비어 있음</i>'}</td><td>${e(obj[k])}</td></tr>`).join('');
    return {obj,html:`<div class="ai-preview"><table><thead><tr><th>항목</th><th>지금</th><th>AI 초안</th></tr></thead><tbody>${rows||'<tr><td colspan="3">제안된 내용이 없다.</td></tr>'}</tbody></table></div>`};},
   extraButtons:`<button type="button" class="ai-btn" data-apply2>빈 칸만 채우기</button>`,
-  apply:(view,mode)=>{if(!view.obj)return false;let n2=0;keys.forEach(k=>{const v=view.obj[k];if(!has(v))return;const el=domField(k);if(!el)return;if(mode==='fill'&&has(el.value))return;el.value=String(v);fire(el);n2++;});toast(`${n2}개 항목에 넣었다.`);},
+  apply:(view,mode)=>{if(!view.obj)return false;let n2=0;keys.forEach(k=>{const v=view.obj[k];if(!has(v))return;const el=domField(k);if(!el)return;if(mode==='fill'&&has(el.value))return;el.value=String(v);fire(el);n2++;});toast(`${n2}개 항목에 넣었다. 꼭 읽고 고친다.`);return 'quiet';},
   applyLabel:'모두 바꾸기'});
 }
 
@@ -2229,12 +2244,132 @@ function patchCounselingNotice(){
 }
 formArea?.addEventListener('click',ev=>{if(ev.target.closest('[data-ai-direct]'))aiCounseling();});
 
+
+/* =====================================================================
+   서술형 기록 → 양식 초안 (모델 선택 후 AI가 양식의 각 칸을 채운다)
+   ===================================================================== */
+function formTitle(){
+ if(activePhase==='counseling')return '평생과정설계 자기소개서 「행복을 이루기 위한 “나”의 이야기」';
+ if(activePhase==='plan')return `미래설계 실천계획서 · ${steps[activeStep-1]?.name||''}`;
+ if(activePhase==='practice')return '실천 · 실행 기록';
+ if(activePhase==='evaluation')return '모니터링 기록';
+ return '';
+}
+function narrativeEnabled(){const ws=$('#workspace');return ws&&ws.classList.contains('active')&&['counseling','plan','practice','evaluation'].includes(activePhase)&&!(activePhase==='plan'&&activeStep<2);}
+function savedNarrative(){
+ try{if(activePhase==='counseling'||activePhase==='plan')return buildStageSaved(activeStep).narrative||'';return state[activePhase]?.form?.narrative||'';}catch(_){return '';}
+}
+const NARR_SKIP=/^(narrative|ai_prompt|ai_analysis|ai_review|reference_age_|area_|common_)/;
+function formSpec(){
+ const seen=new Set(),out=[];
+ $$('#formArea [data-key]').forEach(el=>{
+  const k=el.dataset.key;if(seen.has(k)||PRIVATE.has(k)||NARR_SKIP.test(k)||el.readOnly)return;
+  const choice=el.closest('.choice-buttons');if(el.type==='hidden'&&!choice)return;seen.add(k);
+  let lbl=label(k)||el.closest('.field')?.querySelector('label')?.textContent?.trim();
+  if(!lbl){const row=el.closest('tr');lbl=row?.querySelector('th,td')?.textContent?.trim();}
+  const options=choice?$$('button',choice).map(b=>b.textContent.trim()):el.tagName==='SELECT'?$$('option',el).map(o=>o.value||o.textContent):null;
+  out.push({k,lbl:lbl||k,options});
+ });
+ return out;
+}
+function setFormValue(k,v){
+ const el=domField(k);if(!el)return false;v=String(v).trim();
+ const choice=el.closest('.choice-buttons');
+ if(choice){const b=$$('button',choice).find(x=>x.textContent.trim()===v);if(!b)return false;window.setChoice(b,v);return true;}
+ if(el.tagName==='SELECT'){if(![...el.options].some(o=>(o.value||o.textContent)===v))return false;el.value=v;fire(el);return true;}
+ el.value=v;fire(el);return true;
+}
+function aiNarrative(model){
+ const nEl=domField('narrative');const text=(nEl?.value||'').trim();
+ if(text.length<20){toast('대상자에 대한 내용을 서술형으로 조금 더 적어준다. (20자 이상)','warn');nEl?.focus();return;}
+ const names=currentNames(),spec=formSpec();
+ if(!spec.length){toast('채울 양식을 찾지 못했다.','warn');return;}
+ const intro=activePhase==='counseling'?'':summarize(state.forms?.[1]||{},names,k=>k.startsWith('ai_'));
+ const filled=summarize(collect(),names,k=>k==='narrative');
+ const firstPerson=activePhase==='counseling'?'\n- 자기소개서는 당사자의 이야기이므로 당사자 입장의 쉬운 말("나는 ~을 좋아한다")로 쓴다.':'';
+ const stageHint=activePhase==='plan'?(STAGE_HINT[activeStep]||''):'';
+ const prompt=`평생과정설계 「${formTitle()}」 양식의 초안을 쓴다. ${stageHint}
+아래 [서술형 기록]은 담당 사회복지사가 대상자에 대해 자유롭게 쓴 글이다. 이 내용을 양식의 각 칸에 맞게 나누어 정리한다.
+
+규칙:
+- 서술형 기록과 참고 기록에 있는 내용만 쓴다. 근거가 없는 칸은 빈 문자열("")로 둔다. 지어내지 않는다.
+- 선택지가 있는 칸은 선택지 중 하나를 글자 그대로 쓰거나 ""로 둔다.
+- 한 칸에 여러 내용이 있으면 줄바꿈으로 나눈다. 실천계획은 "- "로 시작하는 줄로 쓴다.${firstPerson}
+- 반드시 아래 키를 가진 JSON 객체 하나만 출력한다. 다른 설명은 쓰지 않는다.
+
+[서술형 기록]
+${scrub(text,names)}
+${intro?`\n[참고: 상담·자기소개서 기록]\n${intro}\n`:''}${filled?`\n[참고: 지금 양식에 이미 적힌 내용 — 뜻을 살려 보완한다]\n${filled}\n`:''}
+[양식의 칸 — 키: 칸 이름 (선택지)]
+{
+${spec.map(f=>`  "${f.k}": "${f.lbl.replace(/"/g,"'")}${f.options?` (선택: ${f.options.join(' | ')})`:''}"`).join(',\n')}
+}`;
+ run({title:`✨ 서술형 → ${formTitle()} 초안`,prompt,model,
+  render:t=>{let obj;try{obj=parseJSON(t);}catch(_){return {obj:null,html:`<div class="ai-err">AI 응답을 양식으로 읽지 못했다. 다른 모델로 다시 해본다.</div><textarea class="ai-result">${e(t)}</textarea>`};}
+   const rows=spec.filter(f=>has(obj[f.k])).map(f=>`<tr><th>${e(f.lbl)}</th><td class="old">${e(domField(f.k)?.value||'')||'<i>비어 있음</i>'}</td><td>${e(obj[f.k])}</td></tr>`).join('');
+   const n=spec.filter(f=>has(obj[f.k])).length;
+   return {obj,html:`<p class="ai-note" style="margin:0 0 8px">양식 ${spec.length}칸 중 <b>${n}칸</b>을 채웠다. 근거가 없는 칸은 비워 두었다.</p><div class="ai-preview"><table><thead><tr><th>칸</th><th>지금</th><th>AI 초안</th></tr></thead><tbody>${rows||'<tr><td colspan="3">채울 내용을 찾지 못했다. 서술형 기록을 더 자세히 적어본다.</td></tr>'}</tbody></table></div>`};},
+  extraButtons:`<button type="button" class="ai-btn" data-apply2>빈 칸만 채우기</button>`,
+  apply:(view,mode)=>{if(!view.obj)return false;let n=0,skip=0;spec.forEach(f=>{const v=view.obj[f.k];if(!has(v))return;const el=domField(f.k);if(!el)return;if(mode==='fill'&&has(el.value))return;if(setFormValue(f.k,v))n++;else skip++;});
+   toast(`${n}개 칸에 초안을 넣었다.${skip?` (선택지와 맞지 않아 ${skip}개는 넣지 않음)`:''} 꼭 읽고 고친다.`);return 'quiet';},
+  applyLabel:'모두 바꾸기'});
+}
+async function fillModelSelect(sel){
+ const models=await AI.models();
+ if(!models.length){sel.innerHTML=`<option value="">AI 준비 안 됨</option>`;sel.disabled=true;sel.title=AI.error||'';return;}
+ const cur=lastModelId||AI.defaultId;
+ sel.disabled=false;
+ sel.innerHTML=Object.keys(PROVIDERS).filter(p=>models.some(m=>m.provider===p)).map(p=>`<optgroup label="${PROVIDERS[p].name}">${models.filter(m=>m.provider===p).map(m=>`<option value="${e(m.id)}" ${m.id===cur?'selected':''}>${e(m.label)}</option>`).join('')}</optgroup>`).join('');
+}
+function injectNarrative(){
+ if(!formArea)return;
+ const old=$('.narrative-box',formArea);
+ if(!narrativeEnabled()){old?.remove();return;}
+ if(old)return;
+ const where=activePhase==='counseling'?'자기소개서의 각 칸':activePhase==='plan'?'미래설계 실천계획서의 각 칸':'영역별 기록 칸';
+ const box=h(`<div class="section narrative-box"><h3>✍ 서술형으로 적고 AI 초안 만들기</h3><div class="sectionbody">
+  <p class="small" style="margin:0 0 8px">대상자에 대해 알고 있는 내용을 편하게 이야기하듯 적는다. 모델을 고르고 <b>AI 초안 생성</b>을 누르면 ${where}에 맞춰 나누어 채운다. 실명·연락처·주소는 쓰지 말고 「당사자」로 적는다.</p>
+  <div class="field"><label for="narrativeText">대상자에 관한 서술형 기록</label><textarea id="narrativeText" data-key="narrative" rows="8" placeholder="예) 당사자는 20대 초반 여성으로 그림 그리기를 가장 좋아한다. 아침에는 어머니와 함께 복지관 주간활동에 오고, 친구 유진과 카페에 가는 것을 즐긴다. 큰 소리가 나면 불안해하며 조용한 곳에서 쉬면 편안해진다. 앞으로 카페에서 일해 보고 싶다고 말한다…"></textarea></div>
+  <div class="nv-row"><label class="nv-model"><span>언어모델</span><select aria-label="AI 언어모델 선택"><option>불러오는 중…</option></select></label><button type="button" class="ai-btn primary-ai" data-nv-go>✨ AI 초안 생성</button><span class="ai-note">결과를 미리 보고 「빈 칸만 채우기」 또는 「모두 바꾸기」를 고른다.</span></div>
+ </div></div>`);
+ box.removeAttribute('data-ux');
+ formArea.prepend(box);
+ const ta=$('textarea',box);ta.value=savedNarrative();
+ const sel=$('select',box);fillModelSelect(sel);
+ sel.addEventListener('change',()=>{lastModelId=sel.value;});
+ $('[data-nv-go]',box).addEventListener('click',async()=>{const models=await AI.models();const m=models.find(x=>x.id===sel.value);if(!m){pick('✨ 서술형 → 양식 초안').then(mm=>{if(mm)aiNarrative(mm);});return;}lastModelId=m.id;aiNarrative(m);});
+}
+
+/* =====================================================================
+   3D 마을 전체화면
+   ===================================================================== */
+function toggleFullscreen(box){
+ const wrap=$('.vl-wrap',box);if(!wrap)return;
+ const fsEl=document.fullscreenElement||document.webkitFullscreenElement;
+ if(fsEl){(document.exitFullscreen||document.webkitExitFullscreen).call(document);return;}
+ if(wrap.classList.contains('vl-pseudo-fs')){setPseudo(wrap,false);return;}
+ const req=wrap.requestFullscreen||wrap.webkitRequestFullscreen;
+ if(req){Promise.resolve(req.call(wrap)).catch(()=>setPseudo(wrap,true));}else setPseudo(wrap,true);
+}
+function setPseudo(wrap,on){wrap.classList.toggle('vl-pseudo-fs',on);document.body.classList.toggle('vl-fs-lock',on);syncFsUI();}
+function syncFsUI(){
+ const box=$('#avatarVillage');if(!box)return;const wrap=$('.vl-wrap',box);
+ const on=!!(document.fullscreenElement||document.webkitFullscreenElement)||wrap.classList.contains('vl-pseudo-fs');
+ const b=$('[data-act=fs]',box);if(b)b.textContent=on?'✕ 전체화면 닫기':'⛶ 전체화면';
+ let x=$('.vl-fs-exit',wrap);
+ if(on&&!x){x=h(`<button type="button" class="vl-fs-exit" data-act="fs-exit">✕ 닫기</button>`);wrap.append(x);}
+ if(!on&&x)x.remove();
+ setTimeout(()=>village.v3?.resize?.(),60);
+}
+document.addEventListener('fullscreenchange',syncFsUI);document.addEventListener('webkitfullscreenchange',syncFsUI);
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){const w=$('#avatarVillage .vl-wrap.vl-pseudo-fs');if(w)setPseudo(w,false);}});
+
 /* =====================================================================
    7. 기존 화면과 연결
    ===================================================================== */
 ['openStep','renderFollowup','switchPhase','closeWorkspace','openMeeting'].forEach(fn=>{
  const base=window[fn];if(typeof base!=='function')return;
- window[fn]=function(){const r=base.apply(this,arguments);refreshAiBar();patchCounselingNotice();return r;};
+ window[fn]=function(){const r=base.apply(this,arguments);refreshAiBar();patchCounselingNotice();injectNarrative();return r;};
 });
 const baseOpenHome=window.openHome;
 window.openHome=function(){const r=baseOpenHome.apply(this,arguments);refreshAiBar();renderVillage();return r;};

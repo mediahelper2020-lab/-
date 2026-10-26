@@ -142,7 +142,7 @@ export async function callModel(m, system, prompt) {
     data = await r.json().catch(() => ({}));
     if (r.ok) return (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('').trim();
   } else if (m.provider === 'anthropic') {
-    r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model: m.model, max_tokens: 4096, system, messages: [{ role: 'user', content: prompt }] }) });
+    r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model: m.model, max_tokens: 16000, system, messages: [{ role: 'user', content: prompt }] }) });
     data = await r.json().catch(() => ({}));
     if (r.ok) return (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
   } else throw Object.assign(new Error('알 수 없는 회사'), { status: 400 });
