@@ -371,11 +371,13 @@ const SYSTEM=`당신은 발달장애인 평생과정설계(PPP: 사람중심 계
 
 /* API 키는 Vercel 환경변수에만 있다. 브라우저는 /api/models 로 쓸 수 있는 모델 목록을 받고 /api/ai 로 요청한다. */
 const AI={
- list:null,defaultId:null,error:'',
+ list:null,providers:{},defaultId:null,error:'',
  async models(force){
   if(this.list&&!force)return this.list;
   if(location.protocol==='file:'){this.error='파일로 직접 연 화면에서는 AI를 쓸 수 없다. Vercel에 배포한 주소에서 쓴다.';return this.list=[];}
-  try{const r=await fetch('/api/models',{cache:'no-store'});if(!r.ok)throw new Error(r.status);const d=await r.json();this.list=d.models||[];this.defaultId=d.defaultId;this.error=this.list.length?'':'Vercel 환경변수에 AI API 키가 아직 없다.';}
+  try{const r=await fetch('/api/models'+(force?'?refresh=1':''),{cache:'no-store'});if(!r.ok)throw new Error(r.status);const d=await r.json();this.list=d.models||[];this.providers=d.providers||{};this.defaultId=d.defaultId;
+   const bad=Object.entries(this.providers).filter(([,v])=>v.configured&&!v.ok).map(([k,v])=>`${PROVIDERS[k]?.short||k}: ${v.error}`);
+   this.error=this.list.length?(bad.length?'일부 회사 연결 오류 — '+bad.join(' / '):''):(bad.length?bad.join(' / '):'Vercel 환경변수에 AI API 키가 아직 없다.');}
   catch(_){this.list=[];this.error='AI 서버(/api)에 연결하지 못했다. Vercel 배포 주소에서 열었는지 확인한다.';}
   return this.list;
  },
@@ -396,25 +398,28 @@ window.PPPAI=AI;
 /* ----- 모델 안내 (설정은 Vercel 환경변수에서 한다) ----- */
 const setDlg=h(`<dialog class="ai-dialog" aria-label="AI 모델"></dialog>`);document.body.append(setDlg);
 setDlg.addEventListener('close',()=>{setDlg.innerHTML='';});
-async function openSettings(){
- setDlg.innerHTML=`<h2>🤖 AI 모델</h2><div class="ai-status"><span class="ai-spin"></span>모델 목록을 확인하는 중…</div>`;setDlg.showModal();
- const models=await AI.models(true);
- const byP=Object.keys(PROVIDERS).map(p=>({p,on:models.some(m=>m.provider===p)}));
+async function openSettings(refresh){
+ setDlg.innerHTML=`<h2>🤖 AI 모델</h2><div class="ai-status"><span class="ai-spin"></span>각 회사에서 최신 모델 목록을 받아오는 중…</div>`;if(!setDlg.open)setDlg.showModal();
+ const models=await AI.models(refresh===true?true:true);
+ const byP=Object.keys(PROVIDERS).map(p=>({p,st:AI.providers[p]||{}}));
  setDlg.innerHTML=`<h2>🤖 AI 모델</h2><p class="ai-note" style="margin:0">API 키는 <b>Vercel 환경변수</b>에만 저장되어 브라우저로 나오지 않는다. AI 작성 버튼을 누를 때마다 아래 모델 중에서 고른다.</p>
- <div class="ai-set-sec"><h3>연결 상태</h3><table class="ai-list"><tbody>${byP.map(x=>`<tr><td><span class="ai-prov" data-p="${x.p}">${PROVIDERS[x.p].short}</span><b>${PROVIDERS[x.p].name}</b></td><td>${x.on?'<b style="color:#2c6a45">● 사용 가능</b>':`<span class="ai-note">키 없음 · <code>${PROVIDERS[x.p].env}</code></span>`}</td></tr>`).join('')}</tbody></table>
+ <div class="ai-set-sec"><h3>연결 상태</h3><table class="ai-list"><tbody>${byP.map(x=>`<tr><td><span class="ai-prov" data-p="${x.p}">${PROVIDERS[x.p].short}</span><b>${PROVIDERS[x.p].name}</b></td><td>${x.st.ok?`<b style="color:#2c6a45">● 사용 가능 · 모델 ${x.st.count}개</b>`:x.st.configured?`<b style="color:#a3402c">● 오류</b><br><small class="ai-note">${e(x.st.error||'')}</small>`:`<span class="ai-note">키 없음 · <code>${PROVIDERS[x.p].env}</code></span>`}</td></tr>`).join('')}</tbody></table>
+ <button type="button" class="secondary" data-refresh style="margin-top:10px">🔄 최신 모델 다시 불러오기</button>
  ${AI.error?`<div class="ai-err" style="margin-top:10px">${e(AI.error)}</div>`:''}</div>
- <div class="ai-set-sec"><h3>사용할 수 있는 모델 (${models.length}개)</h3><table class="ai-list"><tbody>${models.map(m=>`<tr><td><span class="ai-prov" data-p="${m.provider}">${PROVIDERS[m.provider]?.short||m.provider}</span><b>${e(m.label)}</b><br><small class="ai-note">${e(m.model)}${m.id===AI.defaultId?' · ★ 기본':''}</small></td><td><button type="button" data-test-id="${e(m.id)}">연결 테스트</button></td></tr>`).join('')||'<tr><td class="ai-note">아직 없다.</td></tr>'}</tbody></table>
+ <div class="ai-set-sec"><h3>사용할 수 있는 모델 (${models.length}개) · 각 회사에서 최신 목록을 자동으로 받아온다</h3><table class="ai-list"><tbody>${models.map(m=>`<tr><td><span class="ai-prov" data-p="${m.provider}">${PROVIDERS[m.provider]?.short||m.provider}</span><b>${e(m.label)}</b><br><small class="ai-note">${e(m.model)}${m.id===AI.defaultId?' · ★ 기본':''}</small></td><td><button type="button" data-test-id="${e(m.id)}">연결 테스트</button></td></tr>`).join('')||'<tr><td class="ai-note">아직 없다.</td></tr>'}</tbody></table>
  <div data-test class="ai-note"></div></div>
  <details class="ai-set-sec"><summary><b>모델 추가 · 변경 방법 (관리자)</b></summary><ol class="ai-note" style="padding-left:18px">
   <li>Vercel 프로젝트 → <b>Settings → Environment Variables</b></li>
   <li><code>OPENAI_API_KEY</code>, <code>GEMINI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code> 중 가진 키를 넣는다.</li>
-  <li>모델 버전을 직접 정하려면 <code>AI_MODELS</code>에 JSON으로 넣는다.<br><code>[{"provider":"openai","model":"gpt-5-mini","label":"GPT-5 mini"},{"provider":"anthropic","model":"claude-sonnet-5-5","label":"Claude Sonnet"}]</code></li>
-  <li>기본 모델은 <code>AI_DEFAULT_MODEL</code>(예: <code>gpt-5-mini</code>)로 정한다.</li>
+  <li>모델은 각 회사에서 <b>자동으로 최신 목록</b>을 받아온다. 회사별 최대 개수는 <code>AI_MODEL_LIMIT</code>(기본 15)로 바꾼다.</li>
+  <li>목록에 없는 모델을 꼭 넣으려면 <code>AI_MODELS</code>(JSON), 숨기려면 <code>AI_MODELS_EXCLUDE</code>(쉼표 구분)를 쓴다.</li>
+  <li>처음 선택될 모델은 <code>AI_DEFAULT_MODEL</code>(모델 ID)로 정한다.</li>
   <li>저장 후 <b>Deployments → Redeploy</b> 해야 반영된다.</li></ol></details>
  <div class="actions"><button type="button" class="primary" data-close>닫기</button></div>`;
  setDlg.onclick=async ev=>{
   const t=ev.target;
   if(t===setDlg||t.closest('[data-close]')){setDlg.close();return;}
+  if(t.closest('[data-refresh]')){openSettings(true);return;}
   const tid=t.closest('[data-test-id]')?.dataset.testId;
   if(tid){const m=models.find(x=>x.id===tid),out=$('[data-test]',setDlg);out.innerHTML=`<div class="ai-status"><span class="ai-spin"></span>${e(m.label)} 연결 확인 중…</div>`;
    try{const r=await AI.call(m,'"연결 성공"이라고만 답한다.');out.innerHTML=`<p style="color:#2c6a45;font-weight:800">✅ ${e(m.label)} 연결 성공 — ${e(r.slice(0,60))}</p>`;}
@@ -437,7 +442,7 @@ async function pick(title){
   }
   const sel=models.find(m=>m.id===lastModelId)?.id||models.find(m=>m.id===AI.defaultId)?.id||models[0].id;
   runDlg.innerHTML=`<h2>${e(title)}</h2><p class="ai-note" style="margin:0">어떤 언어모델로 작성할까? 같은 내용을 다른 모델로 다시 써서 비교할 수도 있다.</p>
-  <div class="ai-models" role="radiogroup">${models.map(m=>`<label class="ai-model"><input type="radio" name="aiModel" value="${m.id}" ${m.id===sel?'checked':''}><span><span class="ai-prov" data-p="${m.provider}">${PROVIDERS[m.provider]?.short||m.provider}</span><b>${e(m.label)}</b><small>${e(m.model)}</small></span></label>`).join('')}</div>
+  ${Object.keys(PROVIDERS).filter(p=>models.some(m=>m.provider===p)).map(p=>`<h3 class="ai-group"><span class="ai-prov" data-p="${p}">${PROVIDERS[p].short}</span>${PROVIDERS[p].name}</h3><div class="ai-models" role="radiogroup">${models.filter(m=>m.provider===p).map(m=>`<label class="ai-model"><input type="radio" name="aiModel" value="${e(m.id)}" ${m.id===sel?'checked':''}><span><b>${e(m.label)}</b><small>${e(m.model)}</small></span></label>`).join('')}</div>`).join('')}
   <div class="ai-note">🔒 이름·생년월일·연락처·주소·함께하는 사람 정보는 보내지 않는다. 자유서술 칸에 쓴 개인정보는 보내지므로 확인한다.</div>
   <div class="actions"><button type="button" class="secondary" data-cfg>모델 안내</button><button type="button" class="secondary" data-c>취소</button><button type="button" class="ai-btn primary-ai" data-go>✨ 작성하기</button></div>`;
   let chosen=null;

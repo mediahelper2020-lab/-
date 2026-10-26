@@ -7,7 +7,7 @@ export default async function handler(req, res) {
     const auth = await requireUser(req);
     if (auth.error) return res.status(auth.status).json({ error: auth.error });
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const m = models().find((x) => x.id === body.model);
+    const m = (await models()).find((x) => x.id === body.model);
     if (!m) return res.status(400).json({ error: '등록되지 않은 모델이다. Vercel 환경변수를 확인한다.' });
     const prompt = String(body.prompt || ''), system = String(body.system || '');
     if (!prompt.trim()) return res.status(400).json({ error: '보낼 내용이 없다.' });

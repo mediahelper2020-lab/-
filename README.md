@@ -30,22 +30,16 @@ Vercel 프로젝트 → **Settings → Environment Variables** 에 추가하고,
 | `OPENAI_API_KEY` | 선택 | ChatGPT 키 (<https://platform.openai.com/api-keys>) |
 | `GEMINI_API_KEY` | 선택 | Gemini 키 (<https://aistudio.google.com/apikey>) |
 | `ANTHROPIC_API_KEY` | 선택 | Claude 키 (<https://console.anthropic.com/settings/keys>) |
-| `AI_MODELS` | 선택 | 쓸 모델 버전 목록(JSON). 없으면 키가 있는 회사의 기본 모델 2개씩 |
-| `AI_DEFAULT_MODEL` | 선택 | 처음 선택될 모델 (예: `gpt-5-mini`) |
+| `AI_MODEL_LIMIT` | 선택 | 회사별로 보여줄 최대 모델 수 (기본 15) |
+| `AI_MODELS` | 선택 | 목록에 꼭 넣을 모델(JSON). 예: `[{"provider":"openai","model":"gpt-6-luna","label":"GPT-6 Luna"}]` |
+| `AI_MODELS_EXCLUDE` | 선택 | 숨길 모델 ID, 쉼표 구분 (앞부분만 써도 됨, 예: `o4,gemini-2.5`) |
+| `AI_DEFAULT_MODEL` | 선택 | 처음 선택될 모델 ID |
 | `ALLOWED_EMAILS` | 선택 | AI를 쓸 수 있는 계정. 쉼표로 구분, `@기관도메인` 가능 (예: `@sungmin.or.kr,admin@gmail.com`) |
 
-`AI_MODELS` 예시 — 원하는 버전을 여러 개 넣으면 AI 버튼을 누를 때 모두 고를 수 있습니다:
-
-```json
-[
-  {"provider":"openai","model":"gpt-5-mini","label":"GPT-5 mini (빠름)"},
-  {"provider":"openai","model":"gpt-5","label":"GPT-5"},
-  {"provider":"gemini","model":"gemini-2.5-flash","label":"Gemini 2.5 Flash"},
-  {"provider":"anthropic","model":"claude-sonnet-5-5","label":"Claude Sonnet"}
-]
-```
-
-모델 이름은 각 회사 사정에 따라 바뀝니다. 앱의 **🤖 AI 모델 → 연결 테스트**가 실패하면 회사 문서에서 정확한 모델 ID를 확인해 `AI_MODELS`를 고친 뒤 다시 배포하세요.
+### 모델 목록은 자동으로 최신 유지
+서버가 각 회사의 모델 목록 API에서 **지금 그 키로 쓸 수 있는 대화형 모델**을 받아와 최신순으로 보여줍니다(10분마다 갱신).
+새 모델이 나오거나 옛 모델이 종료되어도 코드를 고칠 필요가 없습니다. 음성·이미지·임베딩·날짜 고정 버전은 자동으로 뺍니다.
+앱의 **🤖 AI 모델** 화면에서 회사별 연결 상태(키 오류 등)와 「🔄 최신 모델 다시 불러오기」를 쓸 수 있습니다.
 
 ## 3. 보안 구조
 
