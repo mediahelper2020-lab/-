@@ -27,7 +27,7 @@ chip.addEventListener('click',ev=>{if(ev.target.closest('.cl-out'))signOut();});
 
 /* ---------- 로그인 화면 ---------- */
 const gate=h(`<div class="cl-gate" role="dialog" aria-modal="true" aria-labelledby="clTitle" hidden><form class="cl-card" novalidate>
- <div class="cl-logo">🌱</div><h1 id="clTitle">성민복지관 평생과정설계</h1><p class="cl-sub">기록은 로그인한 계정에 안전하게 저장된다.</p>
+ <div class="cl-logo">🌱</div><h1 id="clTitle">지피티복지관 평생과정설계</h1><p class="cl-sub">기록은 로그인한 계정에 안전하게 저장된다.</p>
  <label>이메일<input name="email" type="email" autocomplete="username" required></label>
  <label>비밀번호<input name="password" type="password" autocomplete="current-password" required minlength="6"></label>
  <div class="cl-err" role="alert"></div>

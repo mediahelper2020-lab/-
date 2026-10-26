@@ -1,4 +1,4 @@
-# 🌱 성민복지관 평생과정설계 (PPP 웹앱)
+# 🌱 지피티복지관 평생과정설계 (PPP 웹앱)
 
 발달장애인 평생과정설계(PPP)의 **상담(자기소개서) → 지원계획(사전·통합·컨퍼런스·확정회의, 단기계획) → 실천 → 모니터링**을 기록하는 웹앱입니다.
 
@@ -36,7 +36,7 @@ Vercel 프로젝트 → **Settings → Environment Variables** 에 추가하고,
 | `AI_MODELS` | 선택 | 목록에 꼭 넣을 모델(JSON). 예: `[{"provider":"openai","model":"gpt-6-luna","label":"GPT-6 Luna"}]` |
 | `AI_MODELS_EXCLUDE` | 선택 | 숨길 모델 ID, 쉼표 구분 (앞부분만 써도 됨, 예: `o4,gemini-2.5`) |
 | `AI_DEFAULT_MODEL` | 선택 | 처음 선택될 모델 ID |
-| `ALLOWED_EMAILS` | 선택 | AI를 쓸 수 있는 계정. 쉼표로 구분, `@기관도메인` 가능 (예: `@sungmin.or.kr,admin@gmail.com`) |
+| `ALLOWED_EMAILS` | 선택 | AI를 쓸 수 있는 계정. 쉼표로 구분, `@기관도메인` 가능 (예: `@기관도메인.or.kr,admin@gmail.com`) |
 
 ### 모델 목록은 자동으로 최신 유지
 서버가 각 회사의 모델 목록 API에서 **지금 그 키로 쓸 수 있는 대화형 모델**을 받아와 최신순으로 보여줍니다(10분마다 갱신).
