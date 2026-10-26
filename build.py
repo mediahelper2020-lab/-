@@ -1,4 +1,4 @@
-"""index.html에 src/village-ai.css · src/village-ai.js 를 넣는다(여러 번 실행해도 같은 결과).
+"""index.html에 src/ 의 CSS·JS(village-ai, cloud, village3d)를 넣는다(여러 번 실행해도 같은 결과).
 사용법: python3 build.py
 """
 import re, json, pathlib
@@ -6,12 +6,17 @@ root = pathlib.Path(__file__).parent
 html = (root / 'index.html').read_text(encoding='utf-8')
 css = (root / 'src/village-ai.css').read_text(encoding='utf-8')
 js = (root / 'src/village-ai.js').read_text(encoding='utf-8')
+cloud = (root / 'src/cloud.js').read_text(encoding='utf-8')
+v3d = (root / 'src/village3d.js').read_text(encoding='utf-8')
+IMPORTMAP = '<script type="importmap" id="village-importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>'
 
 html = re.sub(r'\n?<style id="village-ai-style">.*?</style>', '', html, flags=re.S)
-html = re.sub(r'\n?<script id="village-ai-js">.*?</script>', '', html, flags=re.S)
-html = html.replace('</head>', f'<style id="village-ai-style">\n{css}</style>\n</head>', 1)
+for sid in ('village-ai-js', 'cloud-js', 'village-3d', 'village-importmap'):
+    html = re.sub(r'\n?<script[^>]*id="' + sid + r'"[^>]*>.*?</script>', '', html, flags=re.S)
+html = html.replace('</head>', f'<style id="village-ai-style">\n{css}</style>\n{IMPORTMAP}\n</head>', 1)
 i = html.rfind('</body>')
-html = html[:i] + f'<script id="village-ai-js">\n{js}</script>\n' + html[i:]
+html = (html[:i] + f'<script id="village-ai-js">\n{js}</script>\n<script id="cloud-js">\n{cloud}</script>\n'
+        + f'<script type="module" id="village-3d">\n{v3d}</script>\n' + html[i:])
 
 # 시연 사례(김하니)에 아바타를 입힌다.
 m = re.search(r'(<script id="snapshotState" type="application/json">)(.*?)(</script>)', html, re.S)

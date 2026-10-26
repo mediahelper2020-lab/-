@@ -147,3 +147,51 @@
 }
 @media print{#aiBar,#aiPolish,#avatarVillage,.vl-dialog,.ai-dialog{display:none!important}}
 @media(prefers-reduced-motion:reduce){.vchar,.vchar .vc-body{animation:none!important;transition:none!important}}
+
+/* ===== 3D 마을 ===== */
+@media screen{
+ .vl-stage.is3d{aspect-ratio:16/9;min-width:0;min-height:440px;background:linear-gradient(#cfe6f1,#eef3e4);overflow:hidden}
+ .vl-stage.is3d canvas{position:absolute;inset:0;touch-action:none}
+ .vl-wrap:has(.is3d){overflow:hidden}
+ .vl3d-overlay{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+ .vl3d-overlay .vl-sign{position:absolute;left:0;top:0;transform:none;pointer-events:auto;will-change:transform}
+ .vl3d-overlay .vl-sign:hover{filter:brightness(1.04)}
+ .vc3d-tag{position:absolute;left:0;top:0;pointer-events:auto;border:0;background:none;padding:0;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;will-change:transform;font:inherit}
+ .vc3d-tag .vc-name{position:static;transform:none}
+ .vc3d-tag .vc-bubble{position:static;transform:none;opacity:0}
+ .vc3d-tag .vc-bubble:after{display:none}
+ .vc3d-tag:hover .vc-bubble,.vc3d-tag.hover .vc-bubble,.vc3d-tag:focus-visible .vc-bubble,.show-bubbles .vc3d-tag .vc-bubble{opacity:1}
+ .vc3d-tag.hover .vc-name,.vc3d-tag:hover .vc-name{background:#b8692c;box-shadow:0 2px 0 #8a4b1c}
+ .vc3d-tag:focus-visible{outline:3px solid #b96a22;outline-offset:3px;border-radius:10px}
+ .vc3d-tag.dim{opacity:.25}
+ .vl3d-help{position:absolute;left:14px;bottom:12px;background:#ffffffd0;border-radius:99px;padding:5px 12px;font-size:12px;color:#3d5746;font-weight:700;pointer-events:none;z-index:2}
+ .vl3d-loading{position:absolute;inset:0;display:grid;place-content:center;grid-auto-flow:column;gap:10px;align-items:center;color:#3d5746;font-weight:800}
+ .vl-stage.is3d .vl-empty{left:50%;top:50%;z-index:3}
+ .vc-big.is3d{width:100%;height:250px;margin:0}
+ .vb-preview [data-preview].is3d{width:100%;height:250px}
+ @media(max-width:700px){.vl-stage.is3d{aspect-ratio:4/5;min-height:0}.vl3d-overlay .vl-sign{padding:3px 8px 4px}.vl3d-overlay .vl-sign small{display:none}.vl3d-overlay .vl-sign b{font-size:12px}.vl3d-help{font-size:11px;right:14px;text-align:center}}
+
+ /* 로그인 · 클라우드 상태 */
+ body.cl-locked{overflow:hidden}
+ .cl-gate{position:fixed;inset:0;z-index:2000;display:grid;place-items:center;padding:16px;background:radial-gradient(ellipse at 80% 0,#f6e4d4,transparent 50%),linear-gradient(160deg,#e4eddb,#faf7f0)}
+ .cl-gate[hidden]{display:none}
+ .cl-card{width:min(400px,100%);background:#fffdf8;border:1px solid #dfe3d6;border-radius:22px;padding:30px 28px;box-shadow:0 24px 60px #31482d22;display:flex;flex-direction:column;gap:12px}
+ .cl-logo{font-size:40px;text-align:center}
+ .cl-card h1{margin:0;text-align:center;font-size:22px;color:#244f40}
+ .cl-sub{margin:0 0 6px;text-align:center;color:#6a7568;font-size:14px}
+ .cl-card label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:800;color:#34493c}
+ .cl-card input{border:1px solid #d8ddcf;border-radius:10px;padding:12px;font:inherit;background:#fff}
+ .cl-card input:focus{outline:none;border-color:#6f9c7c;box-shadow:0 0 0 4px #5d8f6e24}
+ .cl-main{padding:13px;font-size:15px}
+ .cl-err{min-height:18px;font-size:13px;color:#a3402c;line-height:1.5}
+ .cl-links{display:flex;justify-content:space-between;gap:8px}
+ .cl-links button{border:0;background:none;color:#3d6d63;font-weight:700;font-size:13px;padding:4px 0;text-decoration:underline}
+ .cl-note{margin:4px 0 0;font-size:12px;color:#7a8676;line-height:1.6;text-align:center}
+ .cl-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#3d5746;background:#f1f4ec;border:1px solid #d6ddcf;border-radius:99px;padding:4px 6px 4px 10px;white-space:nowrap}
+ .cl-chip[hidden]{display:none}
+ .cl-dot{width:8px;height:8px;border-radius:50%;background:#5d9a6f}
+ .cl-chip[data-state=saving] .cl-dot{background:#d29b3c;animation:uxPulse 1s infinite}
+ .cl-chip[data-state=err]{color:#a3402c}.cl-chip[data-state=err] .cl-dot{background:#c4523a}
+ .cl-out{border:1px solid #cfd8c8;background:#fff;border-radius:99px;padding:3px 9px;font-size:11px;font-weight:700;color:#3d5746}
+ @media(max-width:700px){.cl-chip .cl-text{display:none}}
+}

@@ -130,33 +130,57 @@ const SCENE=`<svg class="vl-bg" viewBox="0 0 1000 540" preserveAspectRatio="none
 <g>${[[180,520],[380,512],[600,515],[820,520],[960,505],[60,505]].map(([x,y],i)=>`<g transform="translate(${x} ${y})"><circle r="4" fill="${['#e0607a','#f2b84b','#fff','#8a6bb0','#f2b84b','#e0607a'][i]}"/><circle r="1.6" fill="#c4723f"/></g>`).join('')}</g>
 </svg>`;
 
-const village={timers:[],chars:new Map(),filter:'',zoneFilter:-1};
+const village={timers:[],chars:new Map(),filter:'',zoneFilter:-1,mode:window.Village3D?'3d':'pending',v3:null};
+/* 3D 모듈(Three.js)이 준비되면 3D, 못 불러오면 2D 그림으로 보여준다. */
+function setMode(m){if(village.mode===m)return;village.mode=m;const st=$('#avatarVillage .vl-stage');if(st)buildStage(st);renderVillage();}
+window.addEventListener('village3d-ready',()=>setMode('3d'));
+window.addEventListener('village3d-failed',()=>setMode('2d'));
+setTimeout(()=>{if(village.mode==='pending')setMode('2d');},9000);
+
+function buildStage(stage){
+ if(village.v3){village.v3.dispose();village.v3=null;}
+ village.chars.forEach(c=>{clearTimeout(c.t1);clearTimeout(c.t2);});village.chars.clear();
+ stage.innerHTML='';stage.className='vl-stage';
+ if(village.mode==='3d'){
+  stage.classList.add('is3d');
+  village.v3=window.Village3D.createVillage(stage,{zones:ZONES,onPick:name=>openCard(name),onZone:z=>{village.zoneFilter=village.zoneFilter===z?-1:z;applyFilter();}});
+  stage.append(h(`<div class="vl3d-help">🖱 끌어서 돌리기 · 휠/두 손가락으로 확대 · 캐릭터를 누르면 기록 보기</div>`));
+ }else if(village.mode==='pending'){
+  stage.classList.add('is3d');stage.append(h(`<div class="vl3d-loading"><span class="ai-spin"></span> 3D 마을을 짓는 중…</div>`));
+ }else{
+  stage.innerHTML=SCENE;
+  ZONES.forEach((z,i)=>stage.append(h(`<button type="button" class="vl-sign" data-zone="${i}" style="left:${z.sign[0]/10}%;top:${z.sign[1]/5.4}%"><b>${z.ico} ${z.name}</b><small>${z.sub}</small><em></em></button>`)));
+ }
+ stage.classList.toggle('show-bubbles',!!$('#avatarVillage [data-act=bubbles]')?.checked);
+}
 
 function ensureVillage(){
  const home=$('#homeDashboard');if(!home)return null;
  let box=$('#avatarVillage');
  if(!box){
-  box=h(`<section id="avatarVillage" aria-label="아바타 마을"><div class="vl-hud"><div><span class="home-kicker">OUR VILLAGE · 평생과정설계</span><h1>우리 마을에 오신 것을 환영해요</h1><p>캐릭터를 누르면 그 사람의 진행 상황과 기록을 모두 볼 수 있다. 캐릭터는 지금 단계의 장소에서 지낸다.</p></div><div class="vl-btns"><span class="vl-count"></span><button type="button" class="secondary" data-act="ai">🤖 AI 모델 설정</button><button type="button" class="primary" data-act="add">＋ 대상자 등록</button></div></div>
-  <div class="vl-wrap"><div class="vl-stage" role="group" aria-label="마을 지도">${SCENE}</div></div>
-  <div class="vl-tools"><input type="search" placeholder="이름으로 찾기" aria-label="마을에서 이름 찾기"><label><input type="checkbox" data-act="bubbles"> 말풍선 항상 보기</label><span style="margin-left:auto">팻말을 누르면 그 장소에 있는 사람만 표시한다</span></div></section>`);
+  box=h(`<section id="avatarVillage" aria-label="아바타 마을"><div class="vl-hud"><div><span class="home-kicker">OUR VILLAGE · 평생과정설계</span><h1>우리 마을에 오신 것을 환영해요</h1><p>캐릭터를 누르면 그 사람의 진행 상황과 기록을 모두 볼 수 있다. 캐릭터는 지금 단계의 장소에서 지낸다.</p></div><div class="vl-btns"><span class="vl-count"></span><button type="button" class="secondary" data-act="ai">🤖 AI 모델</button><button type="button" class="primary" data-act="add">＋ 대상자 등록</button></div></div>
+  <div class="vl-wrap"><div class="vl-stage" role="group" aria-label="마을 지도"></div></div>
+  <div class="vl-tools"><input type="search" placeholder="이름으로 찾기" aria-label="마을에서 이름 찾기"><label><input type="checkbox" data-act="bubbles"> 말풍선 항상 보기</label><button type="button" class="secondary" data-act="spin" style="padding:6px 12px">🔄 천천히 돌아보기</button><button type="button" class="secondary" data-act="reset" style="padding:6px 12px">⌂ 처음 시점</button><span style="margin-left:auto">팻말을 누르면 그 장소에 있는 사람만 표시한다</span></div></section>`);
   home.prepend(box);
-  const stage=$('.vl-stage',box);
-  ZONES.forEach((z,i)=>{const s=h(`<button type="button" class="vl-sign" data-zone="${i}" style="left:${z.sign[0]/10}%;top:${z.sign[1]/5.4}%"><b>${z.ico} ${z.name}</b><small>${z.sub}</small><em></em></button>`);stage.append(s);});
+  const stage=$('.vl-stage',box);buildStage(stage);
   box.addEventListener('click',ev=>{
    const act=ev.target.closest('[data-act]')?.dataset.act;
    if(act==='add')openAvatarEditor();
    if(act==='ai')AI.openSettings();
+   if(act==='spin'&&village.v3){village.spin=!village.spin;village.v3.spin(village.spin);}
+   if(act==='reset'&&village.v3)village.v3.resetView();
    const sign=ev.target.closest('.vl-sign');
-   if(sign){const z=Number(sign.dataset.zone);village.zoneFilter=village.zoneFilter===z?-1:z;applyFilter();}
+   if(sign&&village.mode==='2d'){const z=Number(sign.dataset.zone);village.zoneFilter=village.zoneFilter===z?-1:z;applyFilter();}
    const ch=ev.target.closest('.vchar');if(ch)openCard(ch.dataset.name);
   });
   $('input[type=search]',box).addEventListener('input',ev=>{village.filter=ev.target.value.trim();applyFilter();});
-  $('[data-act=bubbles]',box).addEventListener('change',ev=>stage.classList.toggle('show-bubbles',ev.target.checked));
+  $('[data-act=bubbles]',box).addEventListener('change',ev=>{stage.classList.toggle('show-bubbles',ev.target.checked);village.v3?.bubbles(ev.target.checked);});
  }
  return box;
 }
 function applyFilter(){
  const q=village.filter;
+ if(village.v3){village.v3.setFilter({q,zone:village.zoneFilter});return;}
  village.chars.forEach((c,name)=>c.el.classList.toggle('dim',(q&&!name.includes(q))||(village.zoneFilter>=0&&c.zone!==village.zoneFilter)));
  $$('.vl-sign').forEach(s=>s.classList.toggle('on',Number(s.dataset.zone)===village.zoneFilter));
 }
@@ -179,6 +203,16 @@ function walk(c){
 function renderVillage(){
  const box=ensureVillage();if(!box)return;
  const stage=$('.vl-stage',box),users=allUsers();
+ $('.vl-count',box).textContent=`👥 마을 주민 ${users.length}명`;
+ let empty=$('.vl-empty',stage);
+ if(!users.length&&!empty)stage.append(h(`<div class="vl-empty"><b>아직 주민이 없다</b><br>첫 번째 대상자를 등록하고<br>아바타를 골라본다.<br><button type="button" class="primary" data-act="add">＋ 대상자 등록</button></div>`));
+ else if(users.length&&empty)empty.remove();
+ if(village.mode==='pending')return;
+ if(village.mode==='3d'){
+  village.v3.setPeople(users.map(u=>{const p=progressOf(u.name),lv=levelOf(p);const bubble=`Lv.${lv.lv} ${lv.name} · ${p.next==='모든 단계 완료 🏆'?p.next:'다음: '+p.next}`;
+   return {name:u.name,avatar:avatarOf(u),zone:p.zone,bubble,label:`${u.name} · ${ZONES[p.zone].name} · ${bubble} · 눌러서 기록 보기`};}));
+  return;
+ }
  const seen=new Set(),counts=[0,0,0,0,0];
  users.forEach(u=>{
   const p=progressOf(u.name),lv=levelOf(p);seen.add(u.name);counts[p.zone]++;
@@ -198,18 +232,21 @@ function renderVillage(){
  });
  village.chars.forEach((c,name)=>{if(!seen.has(name)){clearTimeout(c.t1);clearTimeout(c.t2);c.el.remove();village.chars.delete(name);}});
  $$('.vl-sign',box).forEach((s,i)=>$('em',s).textContent=counts[i]||'');
- $('.vl-count',box).textContent=`👥 마을 주민 ${users.length}명`;
- let empty=$('.vl-empty',stage);
- if(!users.length&&!empty){stage.append(h(`<div class="vl-empty"><b>아직 주민이 없다</b><br>첫 번째 대상자를 등록하고<br>아바타를 골라본다.<br><button type="button" class="primary" data-act="add">＋ 대상자 등록</button></div>`));}
- else if(users.length&&empty)empty.remove();
  applyFilter();
 }
+
+/* 3D 미리보기: 쓸 수 있으면 3D, 아니면 2D 그림 */
+function mountPreview(dlg,el,av){
+ if(!window.Village3D||!el)return null;
+ try{el.innerHTML='';el.classList.add('is3d');const pv=window.Village3D.createPreview(el,av);(dlg._pvs=dlg._pvs||[]).push(pv);return pv;}catch(_){el.innerHTML=avatarSVG(av);return null;}
+}
+function disposePreviews(dlg){(dlg._pvs||[]).forEach(p=>{try{p.dispose()}catch(_){}});dlg._pvs=[];}
 
 /* =====================================================================
    4. 캐릭터 카드 (진행 상황 · 기록)
    ===================================================================== */
 const cardDlg=h(`<dialog class="vl-dialog" aria-label="캐릭터 카드"></dialog>`);document.body.append(cardDlg);
-cardDlg.addEventListener('close',()=>{cardDlg.innerHTML='';});
+cardDlg.addEventListener('close',()=>{disposePreviews(cardDlg);cardDlg.innerHTML='';});
 cardDlg.addEventListener('click',ev=>{if(ev.target===cardDlg)cardDlg.close();});
 function userIndex(name){return allUsers().findIndex(u=>u.name===name);}
 function openCard(name){
@@ -252,6 +289,7 @@ function openCard(name){
   if(go==='counseling'||go==='practice'||go==='evaluation')switchPhase(go);
  };
  cardDlg.showModal();
+ mountPreview(cardDlg,$('.vc-big',cardDlg),a);
 }
 function ensureUser(name){hubState();if(!state.users.some(u=>u.name===name)){state.users.push({name});persist();}}
 
@@ -259,7 +297,7 @@ function ensureUser(name){hubState();if(!state.users.some(u=>u.name===name)){sta
    5. 대상자 등록 · 아바타 꾸미기
    ===================================================================== */
 const editDlg=h(`<dialog class="vl-dialog" aria-label="아바타 만들기"></dialog>`);document.body.append(editDlg);
-editDlg.addEventListener('close',()=>{editDlg.innerHTML='';});
+editDlg.addEventListener('close',()=>{disposePreviews(editDlg);editDlg.innerHTML='';});
 function openAvatarEditor(name){
  hubState();
  const existing=name?(state.users.find(u=>u.name===name)||allUsers().find(u=>u.name===name)||{name}):null;
@@ -287,7 +325,8 @@ function openAvatarEditor(name){
   <div class="actions"><button type="button" class="secondary" data-x>취소</button><button type="submit" class="primary">${existing?'저장':'마을에 등록하기'}</button></div>
  </div></form>`;
  const form=$('form',editDlg),F=k=>form.elements.namedItem(k);
- const sync=()=>{$('[data-preview]',editDlg).innerHTML=avatarSVG(av);$$('[data-k]',editDlg).forEach(g=>$$('button',g).forEach(b=>b.classList.toggle('on',b.dataset.v===av[g.dataset.k])));};
+ let pv=null;
+ const sync=()=>{if(pv)pv.set(av);else $('[data-preview]',editDlg).innerHTML=avatarSVG(av);$$('[data-k]',editDlg).forEach(g=>$$('button',g).forEach(b=>b.classList.toggle('on',b.dataset.v===av[g.dataset.k])));};
  editDlg.onclick=ev=>{
   if(ev.target===editDlg||ev.target.closest('[data-x]')){editDlg.close();return;}
   if(ev.target.closest('[data-rand]')){av=randomAvatar();sync();return;}
@@ -304,7 +343,7 @@ function openAvatarEditor(name){
   persist();editDlg.close();renderVillage();
   toast(existing?`${name}님의 정보를 저장했다.`:`${name}님이 마을에 왔다! 캐릭터를 누르면 기록을 볼 수 있다.`);
  };
- sync();editDlg.showModal();setTimeout(()=>(existing?$('[data-k=hair] button',editDlg):F('name')).focus(),30);
+ sync();editDlg.showModal();pv=mountPreview(editDlg,$('[data-preview]',editDlg),av);setTimeout(()=>(existing?$('[data-k=hair] button',editDlg):F('name')).focus(),30);
 }
 /* 이용자 관리 화면에서 정보를 고쳐도 아바타가 사라지지 않게 한다. */
 const baseSaveUser=window.saveUser;
@@ -317,11 +356,10 @@ window.saveUser=function(i){
 /* =====================================================================
    6. AI — ChatGPT · Gemini · Claude 다중 모델
    ===================================================================== */
-const AI_STORE='pppAI_models_v1';
 const PROVIDERS={
- openai:{name:'ChatGPT (OpenAI)',short:'ChatGPT',keyUrl:'https://platform.openai.com/api-keys',ph:'sk-...',models:[['gpt-5','GPT-5'],['gpt-5-mini','GPT-5 mini'],['gpt-4.1','GPT-4.1'],['gpt-4o-mini','GPT-4o mini']]},
- gemini:{name:'Gemini (Google)',short:'Gemini',keyUrl:'https://aistudio.google.com/apikey',ph:'AIza...',models:[['gemini-2.5-flash','Gemini 2.5 Flash'],['gemini-2.5-pro','Gemini 2.5 Pro'],['gemini-2.5-flash-lite','Gemini 2.5 Flash-Lite']]},
- anthropic:{name:'Claude (Anthropic)',short:'Claude',keyUrl:'https://console.anthropic.com/settings/keys',ph:'sk-ant-...',models:[['claude-sonnet-5-5','Claude Sonnet 5.5'],['claude-opus-5-5','Claude Opus 5.5'],['claude-haiku-5-5','Claude Haiku 5.5']]},
+ openai:{name:'ChatGPT (OpenAI)',short:'ChatGPT',env:'OPENAI_API_KEY'},
+ gemini:{name:'Gemini (Google)',short:'Gemini',env:'GEMINI_API_KEY'},
+ anthropic:{name:'Claude (Anthropic)',short:'Claude',env:'ANTHROPIC_API_KEY'},
 };
 const SYSTEM=`당신은 발달장애인 평생과정설계(PPP: 사람중심 계획)를 돕는 숙련된 사회복지사이다.
 - 당사자의 꿈·강점·선호에서 출발하고, 결핍보다 "힘과 필요"의 언어로 쓴다.
@@ -331,97 +369,77 @@ const SYSTEM=`당신은 발달장애인 평생과정설계(PPP: 사람중심 계
 - 지역사회 자원(주민센터, 도서관, 복지관, 동호회, 시민옹호인, 활동지원사 등)을 활용한다.
 - 문서체("~한다", "~이다")로 쓴다. 개인을 식별할 수 있는 정보는 쓰지 않고 "당사자"로 부른다.`;
 
+/* API 키는 Vercel 환경변수에만 있다. 브라우저는 /api/models 로 쓸 수 있는 모델 목록을 받고 /api/ai 로 요청한다. */
 const AI={
- load(){try{return Object.assign({keys:{},models:[],defaultId:''},JSON.parse(localStorage.getItem(AI_STORE)||'{}'));}catch(_){return {keys:{},models:[],defaultId:''};}},
- save(c){try{localStorage.setItem(AI_STORE,JSON.stringify(c));}catch(_){toast('AI 설정을 저장하지 못했다.','err');}},
- usable(){const c=this.load();return c.models.filter(m=>has(c.keys[m.provider]));},
+ list:null,defaultId:null,error:'',
+ async models(force){
+  if(this.list&&!force)return this.list;
+  if(location.protocol==='file:'){this.error='파일로 직접 연 화면에서는 AI를 쓸 수 없다. Vercel에 배포한 주소에서 쓴다.';return this.list=[];}
+  try{const r=await fetch('/api/models',{cache:'no-store'});if(!r.ok)throw new Error(r.status);const d=await r.json();this.list=d.models||[];this.defaultId=d.defaultId;this.error=this.list.length?'':'Vercel 환경변수에 AI API 키가 아직 없다.';}
+  catch(_){this.list=[];this.error='AI 서버(/api)에 연결하지 못했다. Vercel 배포 주소에서 열었는지 확인한다.';}
+  return this.list;
+ },
+ usable(){return this.list||[];},
  async call(model,prompt){
-  const c=this.load(),key=c.keys[model.provider];
-  if(!has(key))throw new Error(`${PROVIDERS[model.provider].name} API 키가 없다. [AI 모델 설정]에서 키를 입력한다.`);
+  const token=await window.PPPCloud?.token?.();
+  if(!token)throw new Error('AI를 쓰려면 로그인이 필요하다. (Vercel에 SUPABASE_URL · SUPABASE_ANON_KEY 를 등록했는지 확인한다.)');
   let res,data;
-  try{
-   if(model.provider==='openai'){
-    res=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:model.model,messages:[{role:'system',content:SYSTEM},{role:'user',content:prompt}]})});
-    data=await res.json().catch(()=>({}));
-    if(res.ok)return (data.choices?.[0]?.message?.content||'').trim();
-   }else if(model.provider==='gemini'){
-    res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model.model)}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:'user',parts:[{text:prompt}]}]})});
-    data=await res.json().catch(()=>({}));
-    if(res.ok)return (data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('').trim();
-   }else{
-    res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:model.model,max_tokens:4096,system:SYSTEM,messages:[{role:'user',content:prompt}]})});
-    data=await res.json().catch(()=>({}));
-    if(res.ok)return (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
-   }
-  }catch(err){throw new Error('AI 서버에 연결하지 못했다. 인터넷 연결을 확인한다.\n('+err.message+')');}
-  const msg=data?.error?.message||data?.error?.type||res.statusText||'';
-  const hint=res.status===401||res.status===403?'API 키가 올바르지 않거나 권한이 없다. 키를 다시 확인한다.'
-   :res.status===404?`모델 이름 「${model.model}」을 찾지 못했다. 모델 ID를 확인하거나 다른 모델을 고른다.`
-   :res.status===429?'사용량 한도를 넘었거나 결제(크레딧)가 필요하다. 잠시 후 다시 하거나 다른 모델을 고른다.'
-   :res.status===400?'요청 형식을 이 모델이 받지 않는다. 다른 모델을 골라본다.':'AI 호출에 실패했다.';
-  throw new Error(`${hint}\n[${PROVIDERS[model.provider].short} ${res.status}] ${msg}`);
+  try{res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({model:model.id,system:SYSTEM,prompt})});data=await res.json().catch(()=>({}));}
+  catch(err){throw new Error('AI 서버에 연결하지 못했다. 인터넷 연결을 확인한다.\n('+err.message+')');}
+  if(!res.ok)throw new Error(data.error||`AI 호출 실패 (${res.status})`);
+  return String(data.text||'').trim();
  },
  openSettings,pick,run
 };
 window.PPPAI=AI;
 
-/* ----- 설정 ----- */
-const setDlg=h(`<dialog class="ai-dialog" aria-label="AI 모델 설정"></dialog>`);document.body.append(setDlg);
+/* ----- 모델 안내 (설정은 Vercel 환경변수에서 한다) ----- */
+const setDlg=h(`<dialog class="ai-dialog" aria-label="AI 모델"></dialog>`);document.body.append(setDlg);
 setDlg.addEventListener('close',()=>{setDlg.innerHTML='';});
-function openSettings(){
- const c=AI.load();
- const allSuggest=Object.entries(PROVIDERS).flatMap(([p,v])=>v.models.map(([id,l])=>({p,id,l})));
- setDlg.innerHTML=`<h2>🤖 AI 모델 설정</h2><p class="ai-note" style="margin:0">ChatGPT · Gemini · Claude의 <b>본인 API 키</b>를 넣고, 쓰고 싶은 모델 버전을 여러 개 등록한다. AI 작성 버튼을 누를 때마다 등록한 모델 중에서 고를 수 있다.</p>
- <div class="ai-set-sec"><h3>① API 키</h3>${Object.entries(PROVIDERS).map(([p,v])=>`<div class="ai-key"><b>${v.name}</b><input type="password" data-key="${p}" placeholder="${v.ph}" autocomplete="off" aria-label="${v.name} API 키"><a href="${v.keyUrl}" target="_blank" rel="noopener">키 발급 ↗</a></div>`).join('')}
- <div class="ai-warn">키는 <b>이 브라우저에만</b> 저장되고, 작성본 HTML·백업 파일에는 들어가지 않는다. 공용 PC에서는 사용 후 키를 지운다. 사용 요금은 각 회사 계정으로 청구된다.</div></div>
- <div class="ai-set-sec"><h3>② 사용할 모델 버전</h3><table class="ai-list"><tbody data-list></tbody></table>
- <div class="ai-add"><div><label>회사</label><select data-np>${Object.entries(PROVIDERS).map(([p,v])=>`<option value="${p}">${v.short}</option>`).join('')}</select></div><div><label>모델 ID</label><input data-nm list="aiModelIds" placeholder="예: gpt-5-mini"></div><div><label>표시 이름</label><input data-nl placeholder="예: GPT-5 mini (빠름)"></div><button type="button" class="primary" data-add>추가</button></div>
- <datalist id="aiModelIds">${allSuggest.map(s=>`<option value="${s.id}">${s.l}</option>`).join('')}</datalist>
- <div class="ai-quick"><span class="ai-note">빠른 추가:</span>${allSuggest.map(s=>`<button type="button" data-q="${s.p}|${s.id}|${s.l}">+ ${s.l}</button>`).join('')}</div>
- <p class="ai-note">모델 이름은 회사 사정에 따라 바뀐다. 「테스트」가 실패하면 각 회사의 모델 목록에서 정확한 ID를 확인해 직접 입력한다.</p></div>
- <div data-test class="ai-note"></div>
- <div class="actions"><button type="button" class="secondary" data-close>닫기</button><button type="button" class="primary" data-save>저장</button></div>`;
- $$('[data-key]',setDlg).forEach(i=>{i.value=c.keys[i.dataset.key]||'';}); // value 속성 대신 속성값으로만 넣어 HTML 저장에 남지 않게 한다.
- const readKeys=()=>{$$('[data-key]',setDlg).forEach(i=>{c.keys[i.dataset.key]=i.value.trim();});};
- const list=()=>{
-  if(!c.models.some(m=>m.id===c.defaultId))c.defaultId=c.models[0]?.id||'';
-  $('[data-list]',setDlg).innerHTML=c.models.length?c.models.map(m=>`<tr><td><span class="ai-prov" data-p="${m.provider}">${PROVIDERS[m.provider].short}</span><b>${e(m.label)}</b><br><small class="ai-note">${e(m.model)}</small></td><td><button type="button" data-def="${m.id}" class="${m.id===c.defaultId?'def':''}">${m.id===c.defaultId?'★ 기본':'기본으로'}</button><button type="button" data-test-id="${m.id}">테스트</button><button type="button" data-del="${m.id}">삭제</button></td></tr>`).join('')
-   :'<tr><td class="ai-note">아직 등록한 모델이 없다. 아래에서 추가하거나 빠른 추가를 누른다.</td></tr>';
- };
- const addModel=(p,id,label)=>{id=id.trim();if(!id)return toast('모델 ID를 입력한다.','warn');if(c.models.some(m=>m.provider===p&&m.model===id))return toast('이미 등록한 모델이다.','info');c.models.push({id:'m'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),provider:p,model:id,label:label.trim()||id});list();};
+async function openSettings(){
+ setDlg.innerHTML=`<h2>🤖 AI 모델</h2><div class="ai-status"><span class="ai-spin"></span>모델 목록을 확인하는 중…</div>`;setDlg.showModal();
+ const models=await AI.models(true);
+ const byP=Object.keys(PROVIDERS).map(p=>({p,on:models.some(m=>m.provider===p)}));
+ setDlg.innerHTML=`<h2>🤖 AI 모델</h2><p class="ai-note" style="margin:0">API 키는 <b>Vercel 환경변수</b>에만 저장되어 브라우저로 나오지 않는다. AI 작성 버튼을 누를 때마다 아래 모델 중에서 고른다.</p>
+ <div class="ai-set-sec"><h3>연결 상태</h3><table class="ai-list"><tbody>${byP.map(x=>`<tr><td><span class="ai-prov" data-p="${x.p}">${PROVIDERS[x.p].short}</span><b>${PROVIDERS[x.p].name}</b></td><td>${x.on?'<b style="color:#2c6a45">● 사용 가능</b>':`<span class="ai-note">키 없음 · <code>${PROVIDERS[x.p].env}</code></span>`}</td></tr>`).join('')}</tbody></table>
+ ${AI.error?`<div class="ai-err" style="margin-top:10px">${e(AI.error)}</div>`:''}</div>
+ <div class="ai-set-sec"><h3>사용할 수 있는 모델 (${models.length}개)</h3><table class="ai-list"><tbody>${models.map(m=>`<tr><td><span class="ai-prov" data-p="${m.provider}">${PROVIDERS[m.provider]?.short||m.provider}</span><b>${e(m.label)}</b><br><small class="ai-note">${e(m.model)}${m.id===AI.defaultId?' · ★ 기본':''}</small></td><td><button type="button" data-test-id="${e(m.id)}">연결 테스트</button></td></tr>`).join('')||'<tr><td class="ai-note">아직 없다.</td></tr>'}</tbody></table>
+ <div data-test class="ai-note"></div></div>
+ <details class="ai-set-sec"><summary><b>모델 추가 · 변경 방법 (관리자)</b></summary><ol class="ai-note" style="padding-left:18px">
+  <li>Vercel 프로젝트 → <b>Settings → Environment Variables</b></li>
+  <li><code>OPENAI_API_KEY</code>, <code>GEMINI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code> 중 가진 키를 넣는다.</li>
+  <li>모델 버전을 직접 정하려면 <code>AI_MODELS</code>에 JSON으로 넣는다.<br><code>[{"provider":"openai","model":"gpt-5-mini","label":"GPT-5 mini"},{"provider":"anthropic","model":"claude-sonnet-5-5","label":"Claude Sonnet"}]</code></li>
+  <li>기본 모델은 <code>AI_DEFAULT_MODEL</code>(예: <code>gpt-5-mini</code>)로 정한다.</li>
+  <li>저장 후 <b>Deployments → Redeploy</b> 해야 반영된다.</li></ol></details>
+ <div class="actions"><button type="button" class="primary" data-close>닫기</button></div>`;
  setDlg.onclick=async ev=>{
   const t=ev.target;
   if(t===setDlg||t.closest('[data-close]')){setDlg.close();return;}
-  if(t.closest('[data-save]')){readKeys();AI.save(c);setDlg.close();toast('AI 설정을 저장했다.');refreshAiBar();return;}
-  if(t.closest('[data-add]')){addModel($('[data-np]',setDlg).value,$('[data-nm]',setDlg).value,$('[data-nl]',setDlg).value);$('[data-nm]',setDlg).value='';$('[data-nl]',setDlg).value='';return;}
-  const q=t.closest('[data-q]')?.dataset.q;if(q){const [p,id,l]=q.split('|');addModel(p,id,l);return;}
-  const d=t.closest('[data-def]')?.dataset.def;if(d){c.defaultId=d;list();return;}
-  const del=t.closest('[data-del]')?.dataset.del;if(del){c.models=c.models.filter(m=>m.id!==del);list();return;}
   const tid=t.closest('[data-test-id]')?.dataset.testId;
-  if(tid){readKeys();AI.save(c);const m=c.models.find(x=>x.id===tid),out=$('[data-test]',setDlg);out.innerHTML=`<div class="ai-status"><span class="ai-spin"></span>${e(m.label)} 연결 확인 중…</div>`;
+  if(tid){const m=models.find(x=>x.id===tid),out=$('[data-test]',setDlg);out.innerHTML=`<div class="ai-status"><span class="ai-spin"></span>${e(m.label)} 연결 확인 중…</div>`;
    try{const r=await AI.call(m,'"연결 성공"이라고만 답한다.');out.innerHTML=`<p style="color:#2c6a45;font-weight:800">✅ ${e(m.label)} 연결 성공 — ${e(r.slice(0,60))}</p>`;}
    catch(err){out.innerHTML=`<div class="ai-err">❌ ${e(err.message)}</div>`;}}
  };
- list();setDlg.showModal();
+ refreshAiBar();
 }
 
 /* ----- 모델 고르기 → 실행 → 결과 확인 ----- */
 const runDlg=h(`<dialog class="ai-dialog" aria-label="AI 작성"></dialog>`);document.body.append(runDlg);
 runDlg.addEventListener('close',()=>{runDlg.innerHTML='';});
 let lastModelId='';
-function pick(title){
+async function pick(title){
+ const models=await AI.models();
  return new Promise(resolve=>{
-  const c=AI.load(),models=AI.usable();
   if(!models.length){
-   runDlg.innerHTML=`<h2>${e(title)}</h2><div class="vc-empty">AI를 쓰려면 먼저 <b>API 키와 모델</b>을 등록해야 한다.<br>ChatGPT · Gemini · Claude 중 가지고 있는 키를 넣고 모델을 추가한다.</div><div class="actions"><button type="button" class="secondary" data-c>닫기</button><button type="button" class="primary" data-s>AI 모델 설정 열기</button></div>`;
+   runDlg.innerHTML=`<h2>${e(title)}</h2><div class="vc-empty">${e(AI.error||'사용할 수 있는 AI 모델이 없다.')}<br>관리자가 Vercel 환경변수에 ChatGPT · Gemini · Claude API 키를 등록하면 바로 쓸 수 있다.</div><div class="actions"><button type="button" class="secondary" data-c>닫기</button><button type="button" class="primary" data-s>AI 모델 안내 보기</button></div>`;
    runDlg.onclick=ev=>{if(ev.target.closest('[data-s]')){runDlg.close();openSettings();}else if(ev.target===runDlg||ev.target.closest('[data-c]'))runDlg.close();};
    runDlg.onclose=()=>resolve(null);runDlg.showModal();return;
   }
-  const sel=models.find(m=>m.id===lastModelId)?.id||models.find(m=>m.id===c.defaultId)?.id||models[0].id;
+  const sel=models.find(m=>m.id===lastModelId)?.id||models.find(m=>m.id===AI.defaultId)?.id||models[0].id;
   runDlg.innerHTML=`<h2>${e(title)}</h2><p class="ai-note" style="margin:0">어떤 언어모델로 작성할까? 같은 내용을 다른 모델로 다시 써서 비교할 수도 있다.</p>
-  <div class="ai-models" role="radiogroup">${models.map(m=>`<label class="ai-model"><input type="radio" name="aiModel" value="${m.id}" ${m.id===sel?'checked':''}><span><span class="ai-prov" data-p="${m.provider}">${PROVIDERS[m.provider].short}</span><b>${e(m.label)}</b><small>${e(m.model)}</small></span></label>`).join('')}</div>
+  <div class="ai-models" role="radiogroup">${models.map(m=>`<label class="ai-model"><input type="radio" name="aiModel" value="${m.id}" ${m.id===sel?'checked':''}><span><span class="ai-prov" data-p="${m.provider}">${PROVIDERS[m.provider]?.short||m.provider}</span><b>${e(m.label)}</b><small>${e(m.model)}</small></span></label>`).join('')}</div>
   <div class="ai-note">🔒 이름·생년월일·연락처·주소·함께하는 사람 정보는 보내지 않는다. 자유서술 칸에 쓴 개인정보는 보내지므로 확인한다.</div>
-  <div class="actions"><button type="button" class="secondary" data-cfg>모델 관리</button><button type="button" class="secondary" data-c>취소</button><button type="button" class="ai-btn primary-ai" data-go>✨ 작성하기</button></div>`;
+  <div class="actions"><button type="button" class="secondary" data-cfg>모델 안내</button><button type="button" class="secondary" data-c>취소</button><button type="button" class="ai-btn primary-ai" data-go>✨ 작성하기</button></div>`;
   let chosen=null;
   runDlg.onclick=ev=>{
    if(ev.target===runDlg||ev.target.closest('[data-c]')){runDlg.close();return;}
@@ -445,7 +463,7 @@ async function run({title,prompt,render,apply,applyLabel='적용하기',extraBut
   return;
  }
  const view=render(text);
- runDlg.innerHTML=`<h2>${e(title)}</h2><p class="ai-note" style="margin:0 0 10px"><span class="ai-prov" data-p="${model.provider}">${PROVIDERS[model.provider].short}</span>${e(model.label)} 작성 · 적용하기 전에 반드시 읽고 고친다.</p>${view.html}
+ runDlg.innerHTML=`<h2>${e(title)}</h2><p class="ai-note" style="margin:0 0 10px"><span class="ai-prov" data-p="${model.provider}">${PROVIDERS[model.provider]?.short||model.provider}</span>${e(model.label)} 작성 · 적용하기 전에 반드시 읽고 고친다.</p>${view.html}
  <div class="actions"><button type="button" class="secondary" data-c>닫기</button><button type="button" class="secondary" data-again>다른 모델로 다시</button>${extraButtons}${apply?`<button type="button" class="ai-btn primary-ai" data-apply>${e(applyLabel)}</button>`:''}</div>`;
  runDlg.onclick=ev=>{
   if(ev.target===runDlg||ev.target.closest('[data-c]')){runDlg.close();return;}
@@ -588,7 +606,7 @@ function refreshAiBar(){
  else if(active&&activePhase==='plan'&&activeStep>=2)btns=`<button type="button" class="ai-btn primary-ai" data-a="plan">✨ AI 계획서 초안 (${e(steps[activeStep-1].name)})</button>`;
  else if(active&&(activePhase==='practice'||activePhase==='evaluation'))btns=`<button type="button" class="ai-btn primary-ai" data-a="followup">✨ AI ${activePhase==='practice'?'실천':'모니터링'} 종합의견</button>`;
  aiBar.hidden=!btns;$('[data-btns]',aiBar).innerHTML=btns;
- const n=AI.usable().length;$('[data-cfg]',aiBar).textContent=n?`⚙ 모델 ${n}개`:'⚙ 모델 설정 필요';
+ const n=AI.usable().length;$('[data-cfg]',aiBar).textContent=AI.list===null?'🤖 AI 모델':n?`🤖 모델 ${n}개`:'🤖 AI 준비 안 됨';
 }
 aiBar.addEventListener('click',ev=>{
  const a=ev.target.closest('[data-a]')?.dataset.a;
@@ -629,11 +647,12 @@ let villageQueued=false;
 window.persist=function(){const r=basePersist.apply(this,arguments);if(!villageQueued&&!$('#homeDashboard')?.hidden){villageQueued=true;requestAnimationFrame(()=>{villageQueued=false;renderVillage();});}return r;};
 
 /* 사이드바에 AI 설정 바로가기 */
-const navEl=$('.sidebar .nav');if(navEl)navEl.append(h(`<a role="button" tabindex="0">🤖 AI 모델 설정</a>`));
+const navEl=$('.sidebar .nav');if(navEl)navEl.append(h(`<a role="button" tabindex="0">🤖 AI 모델</a>`));
 navEl?.lastElementChild?.addEventListener('click',openSettings);
 navEl?.lastElementChild?.addEventListener('keydown',ev=>{if(ev.key==='Enter')openSettings();});
 /* 상단 메뉴에도 추가 */
-const menu=$('#uxMenu');if(menu){const b=h(`<button type="button" role="menuitem">🤖 AI 모델 설정</button>`);b.onclick=()=>{menu.hidden=true;openSettings();};menu.prepend(b);}
+const menu=$('#uxMenu');if(menu){const b=h(`<button type="button" role="menuitem">🤖 AI 모델</button>`);b.onclick=()=>{menu.hidden=true;openSettings();};menu.prepend(b);}
 
 renderVillage();refreshAiBar();patchCounselingNotice();
+AI.models().then(refreshAiBar);
 })();
