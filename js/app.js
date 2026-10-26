@@ -72,7 +72,7 @@ function renderHeader() {
   const sel = $('#case-select');
   sel.innerHTML = state.cases.map(c => `<option value="${c.id}" ${c.id === state.currentId ? 'selected' : ''}>${esc(c.label)}</option>`).join('') || '<option>참여자 없음</option>';
   $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === state.tab));
-  $('#ai-status').textContent = AI.hasKey() ? '● AI 연결됨' : '○ AI 미설정';
+  $('#ai-status').textContent = AI.provider() === 'free' ? '● 무료 AI' : AI.hasKey() ? '● Gemini' : '○ 키 없음';
   $('#ai-status').className = AI.hasKey() ? 'ok' : 'off';
 }
 
@@ -419,18 +419,20 @@ function renderGuide(main) {
       <li><b>평가</b> — 활동평가(월/분기/반기)와 연 1회 실천과정 평가를 기록하고, AI로 평가 초안을 만듭니다.</li>
       <li><b>출력</b> — 각 화면의 [🖨 인쇄 / PDF] 또는 [📄 .doc] 버튼으로 내려받아 한글(HWP)·워드에서 열 수 있습니다.</li>
     </ol>
-    <h3>무료 AI(Gemini) API 키 발급 방법</h3>
+    <h3>무료 AI 사용 방법</h3>
+    <p><b>설정 없이 바로</b> ✨ 버튼을 누르면 키가 필요 없는 무료 AI(Pollinations)가 작동합니다.
+    사용자가 몰리면 잠시 막힐 수 있으니, 교육 현장처럼 여러 명이 동시에 쓸 때는 아래처럼 <b>Gemini 무료 키</b>로 바꾸는 것을 권장합니다.</p>
     <ol>
       <li>구글 계정으로 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> 접속</li>
       <li>[API 키 만들기(Create API key)] 클릭 → 생성된 키 복사 (카드 등록 불필요, 무료 등급)</li>
-      <li>이 앱 상단 [⚙ AI 설정]에 붙여넣고 저장</li>
+      <li>이 앱 상단 [⚙ AI 설정]에서 「Google Gemini 무료 키」 선택 → 붙여넣고 저장</li>
     </ol>
     <div class="warn">
       <b>⚠ 개인정보 보호 안내</b>
       <ul>
         <li>모든 기록은 <b>지금 사용하는 이 브라우저에만</b> 저장됩니다. 다른 PC에서 이어 쓰려면 [데이터 관리 → 백업 파일 저장/불러오기]를 이용하세요.</li>
-        <li>AI 버튼을 누를 때만 내용이 Google Gemini로 전송됩니다. 이름·생년월일·연락처·주소·가족 인적사항(🔒 표시)은 <b>전송에서 제외</b>됩니다.</li>
-        <li>Gemini <b>무료 등급은 입력 내용이 Google의 서비스 개선에 활용될 수 있습니다.</b> 서술형 칸에도 실명, 주민번호, 구체적 병력 등 민감정보는 적지 말고 기관 개인정보 지침을 따르세요.</li>
+        <li>AI 버튼을 누를 때만 내용이 AI 서버(Pollinations 또는 Google Gemini)로 전송됩니다. 이름·생년월일·연락처·주소·가족 인적사항(🔒 표시)은 <b>전송에서 제외</b>됩니다.</li>
+        <li><b>무료 AI는 입력 내용이 서비스 개선에 활용될 수 있습니다.</b> 서술형 칸에도 실명, 주민번호, 구체적 병력 등 민감정보는 적지 말고 기관 개인정보 지침을 따르세요.</li>
         <li>공용 PC에서는 사용 후 [데이터 관리 → 이 참여자 삭제]로 정리하세요.</li>
       </ul>
     </div>
@@ -492,25 +494,34 @@ function downloadDoc(filename, html) {
 
 // ---------- 설정 / 데이터 관리 ----------
 function openSettings() {
-  const s = AI.getSettings();
-  modal('⚙ AI 설정 (무료 Gemini API)', `
-    <p>Google AI Studio에서 <b>무료 API 키</b>를 발급받아 입력하세요. → <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">키 발급 페이지 열기</a></p>
-    <label class="f wide"><span>API 키</span><input id="s-key" type="password" value="${esc(s.key)}" placeholder="AIza..." autocomplete="off"></label>
-    <label class="f wide"><span>모델</span><input id="s-model" value="${esc(s.model || 'gemini-2.5-flash')}" list="model-list">
-      <datalist id="model-list"><option value="gemini-2.5-flash"><option value="gemini-2.5-flash-lite"><option value="gemini-2.0-flash"></datalist>
-      <small class="muted">무료 등급에서 오류가 나면 목록의 다른 모델로 바꿔보세요.</small></label>
-    <p class="warn small">키는 이 브라우저에만 저장됩니다. 무료 등급은 입력 내용이 Google 서비스 개선에 활용될 수 있으니 민감정보는 입력하지 마세요.</p>
+  const s = AI.getSettings(); const prov = AI.provider();
+  const read = () => ({ provider: $('input[name=s-prov]:checked').value, key: $('#s-key').value.trim(), model: $('#s-model').value.trim() || 'gemini-2.5-flash' });
+  modal('⚙ AI 설정', `
+    <div class="opts col">
+      <label class="chip" style="display:block;border-radius:10px;padding:8px 12px"><input type="radio" name="s-prov" value="free" ${prov === 'free' ? 'checked' : ''}><b>키 없이 바로 사용 (무료)</b>&nbsp;— 설정 없이 바로 됩니다. 사용자가 많으면 잠시 막힐 수 있어요.</label>
+      <label class="chip" style="display:block;border-radius:10px;padding:8px 12px"><input type="radio" name="s-prov" value="gemini" ${prov === 'gemini' ? 'checked' : ''}><b>Google Gemini 무료 키 (권장)</b>&nbsp;— 1분 발급, 더 안정적이고 품질이 좋아요.</label>
+    </div>
+    <div id="s-gemini" style="margin-top:12px">
+      <p>Google AI Studio에서 <b>무료 API 키</b>를 발급받아 입력하세요. → <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">키 발급 페이지 열기</a></p>
+      <label class="f wide"><span>API 키</span><input id="s-key" type="password" value="${esc(s.key)}" placeholder="AIza..." autocomplete="off"></label>
+      <label class="f wide"><span>모델</span><input id="s-model" value="${esc(s.model || 'gemini-2.5-flash')}" list="model-list">
+        <datalist id="model-list"><option value="gemini-2.5-flash"><option value="gemini-2.5-flash-lite"><option value="gemini-2.0-flash"></datalist>
+        <small class="muted">무료 등급에서 오류가 나면 목록의 다른 모델로 바꿔보세요.</small></label>
+    </div>
+    <p class="warn small">무료 AI는 입력 내용이 해당 회사(Pollinations 또는 Google)로 전송되며 서비스 개선에 활용될 수 있습니다. 🔒 개인정보 칸은 전송되지 않지만, 서술형 칸에도 실명·민감정보는 적지 마세요.</p>
     <div id="s-test" class="muted small"></div>`,
     [{
-      label: '저장', onClick: () => { AI.saveSettings({ key: $('#s-key').value.trim(), model: $('#s-model').value.trim() || 'gemini-2.5-flash' }); renderHeader(); flash('AI 설정 저장됨'); },
+      label: '저장', onClick: () => { AI.saveSettings(read()); renderHeader(); flash('AI 설정 저장됨'); },
     }, {
       label: '연결 테스트', cls: 'ghost', onClick: () => {
-        AI.saveSettings({ key: $('#s-key').value.trim(), model: $('#s-model').value.trim() || 'gemini-2.5-flash' });
+        AI.saveSettings(read());
         const out = $('#s-test'); out.textContent = '테스트 중…';
         AI.call('"연결 성공"이라고만 답하세요.').then(t => { out.textContent = '✅ ' + t; renderHeader(); }).catch(e => { out.textContent = '❌ ' + e.message; });
         return false;
       },
     }]);
+  const sync = () => { $('#s-gemini').style.display = $('input[name=s-prov]:checked').value === 'gemini' ? '' : 'none'; };
+  $$('input[name=s-prov]').forEach(r => r.onchange = sync); sync();
 }
 
 function openDataMenu() {

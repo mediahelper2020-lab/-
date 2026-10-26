@@ -1,5 +1,5 @@
-// AI 연동 — Google Gemini 무료 API 키(사용자 본인 키)를 브라우저에서 직접 호출
-// 키는 이 브라우저의 localStorage에만 저장되며, 서버로 전송되지 않습니다.
+// AI 연동 — 기본은 키 없이 쓰는 무료 API(Pollinations), 선택 시 본인 Gemini 무료 키로 브라우저에서 직접 호출
+// 키는 이 브라우저의 localStorage에만 저장되며, 다른 서버로 전송되지 않습니다.
 
 const AI = {
   settingsKey: 'ppp_ai_settings',
@@ -10,9 +10,39 @@ const AI = {
   saveSettings(s) {
     try { localStorage.setItem(this.settingsKey, JSON.stringify(s)); } catch {}
   },
-  hasKey() { return !!this.getSettings().key; },
+  // provider: 'free' = 키 없이 쓰는 Pollinations 무료 API(기본값), 'gemini' = 본인 Gemini 무료 키
+  provider() { return this.getSettings().provider || 'free'; },
+  hasKey() { return this.provider() === 'free' || !!this.getSettings().key; },
 
-  async call(prompt, { json = false } = {}) {
+  async call(prompt, opts = {}) {
+    return this.provider() === 'free' ? this.callFree(prompt, opts) : this.callGemini(prompt, opts);
+  },
+
+  async callFree(prompt, { json = false } = {}) {
+    const res = await fetch('https://text.pollinations.ai/openai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'openai',
+        private: true,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT + (json ? '\n반드시 JSON 객체 하나만 출력하고 다른 설명은 쓰지 마세요.' : '') },
+          { role: 'user', content: prompt },
+        ],
+      }),
+    }).catch(() => { throw new Error('무료 AI 서버에 연결할 수 없습니다. 인터넷 연결을 확인하거나, [⚙ AI 설정]에서 Gemini 무료 키 방식으로 바꿔주세요.'); });
+    if (res.status === 429) throw new Error('무료 AI 사용자가 많아 잠시 제한되었습니다. 20초쯤 뒤 다시 눌러주세요.\n자주 막히면 [⚙ AI 설정]에서 Gemini 무료 키 방식으로 바꾸면 더 안정적입니다.');
+    if (!res.ok) throw new Error(`무료 AI 호출 실패 (${res.status}). 잠시 후 다시 시도하거나 [⚙ AI 설정]에서 Gemini 키 방식으로 바꿔주세요.`);
+    const data = await res.json().catch(() => null);
+    const text = (data?.choices?.[0]?.message?.content || '').trim();
+    if (!text) throw new Error('AI 응답이 비어 있습니다. 잠시 후 다시 시도해주세요.');
+    if (!json) return text;
+    const m = text.match(/\{[\s\S]*\}/);
+    try { return JSON.parse(m ? m[0] : text); }
+    catch { throw new Error('AI 응답을 읽지 못했습니다. 한 번 더 눌러주세요.'); }
+  },
+
+  async callGemini(prompt, { json = false } = {}) {
     const { key, model = 'gemini-2.5-flash' } = this.getSettings();
     if (!key) throw new Error('API 키가 없습니다. 상단 [⚙ AI 설정]에서 무료 Gemini API 키를 입력해주세요.');
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
