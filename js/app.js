@@ -5,11 +5,13 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => (s ?? '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-const state = { cases: [], currentId: null, tab: 'process', introSection: 0 };
+const state = { cases: [], currentId: null, tab: 'dashboard', introSection: 0, storyYear: new Date().getFullYear() };
+const today = () => new Date().toISOString().slice(0, 10);
 
 // ---------- 저장소 ----------
 function load() {
   try { state.cases = JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch { state.cases = []; }
+  state.cases.forEach(normalizeCase);
   try { state.currentId = localStorage.getItem(STORE_KEY + '_cur'); } catch {}
   if (!state.cases.find(c => c.id === state.currentId)) state.currentId = state.cases[0]?.id || null;
 }
@@ -20,19 +22,29 @@ function save() {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(state.cases));
       localStorage.setItem(STORE_KEY + '_cur', state.currentId || '');
+      const c = cur(); if (c) c.updated = new Date().toISOString();
       flash('저장됨');
     } catch (e) { alert('저장 공간이 부족하거나 저장할 수 없습니다: ' + e.message); }
   }, 300);
 }
 const cur = () => state.cases.find(c => c.id === state.currentId);
 
-function newCase(name) {
-  const c = {
+function newCase(name, meta = {}) {
+  const c = normalizeCase({
     id: uid(), label: name || '새 참여자', created: new Date().toISOString(),
     intro: {}, plan: { year: new Date().getFullYear(), domains: DOMAINS.map(a => ({ area: a, goal: '', plan: '', note: '' })) },
-    process: {}, evals: [], evalSummary: '', activityLog: [],
-  };
+    process: {}, evals: [], evalSummary: '', activityLog: [], meta,
+  });
   state.cases.push(c); state.currentId = c.id; save();
+  return c;
+}
+// 예전 버전 데이터·백업 파일에 없는 항목을 채움
+function normalizeCase(c) {
+  c.intro = c.intro || {}; c.process = c.process || {}; c.evals = c.evals || []; c.activityLog = c.activityLog || [];
+  c.plan = c.plan || { year: new Date().getFullYear(), domains: [] }; c.plan.domains = c.plan.domains || [];
+  c.meta = { status: '진행중', start: (c.created || '').slice(0, 10) || today(), worker: '', memo: '', ...(c.meta || {}) };
+  c.stories = c.stories || {}; c.events = c.events || [];
+  c.updated = c.updated || c.created;
   return c;
 }
 
@@ -70,7 +82,7 @@ function requireKey() {
 // ---------- 헤더 ----------
 function renderHeader() {
   const sel = $('#case-select');
-  sel.innerHTML = state.cases.map(c => `<option value="${c.id}" ${c.id === state.currentId ? 'selected' : ''}>${esc(c.label)}</option>`).join('') || '<option>참여자 없음</option>';
+  sel.innerHTML = state.cases.map(c => `<option value="${c.id}" ${c.id === state.currentId ? 'selected' : ''}>${esc(c.label)}</option>`).join('') || '<option value="">참여자 없음</option>';
   $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === state.tab));
   $('#ai-status').textContent = AI.provider() === 'free' ? '● 무료 AI' : AI.hasKey() ? '● Gemini' : '○ 키 없음';
   $('#ai-status').className = AI.hasKey() ? 'ok' : 'off';
@@ -80,17 +92,42 @@ function render() {
   renderHeader();
   const main = $('#main');
   if (state.tab === 'guide') return renderGuide(main);
+  if (state.tab === 'dashboard') return renderDashboard(main);
+  if (state.tab === 'people') return renderPeople(main);
+  if (state.tab === 'calendar') return renderCalendar(main);
   if (!cur()) {
     main.innerHTML = `<div class="empty"><h2>참여자를 먼저 등록해주세요</h2><p>참여자별로 자기소개서, 실천계획서, 진행과정이 따로 저장됩니다.</p><button class="primary" id="first-case">+ 새 참여자 등록</button></div>`;
     $('#first-case').onclick = addCase; return;
   }
-  ({ process: renderProcess, intro: renderIntro, plan: renderPlan, eval: renderEval })[state.tab](main);
+  ({ process: renderProcess, intro: renderIntro, plan: renderPlan, story: renderStory, eval: renderEval })[state.tab](main);
 }
 
-function addCase() {
-  const name = prompt('참여자 표시 이름 (가명/이니셜 권장, 예: 김OO, A님)');
-  if (name === null) return;
-  newCase(name.trim() || '새 참여자'); render();
+function addCase() { openCaseForm(); }
+
+// 참여자 등록·수정 (기관 관리 항목)
+function openCaseForm(c) {
+  const m = c?.meta || { status: '진행중', start: today() };
+  modal(c ? '참여자 정보 수정' : '새 참여자 등록', `
+    <p class="muted small">실명 대신 <b>가명·이니셜</b>을 권장합니다. 자세한 인적사항은 자기소개서에 기록합니다.</p>
+    <div class="fields">
+      <label class="f"><span>표시 이름 <b class="req">*</b></span><input id="cf-label" maxlength="30" value="${esc(c?.label || '')}" placeholder="예: 김OO, A님" required aria-describedby="cf-err"></label>
+      <label class="f"><span>참여 상태</span><select id="cf-status">${CASE_STATUS.map(s => `<option ${m.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select></label>
+      <label class="f"><span>참여 시작일 <b class="req">*</b></span><input id="cf-start" type="date" value="${esc(m.start || '')}" required></label>
+      <label class="f"><span>담당 사회복지사</span><input id="cf-worker" maxlength="20" value="${esc(m.worker || '')}" placeholder="예: 홍길동"></label>
+      <label class="f wide"><span>관리 메모</span><textarea id="cf-memo" rows="2" maxlength="300">${esc(m.memo || '')}</textarea></label>
+    </div>
+    <p id="cf-err" class="err" role="alert"></p>`, [{
+    label: c ? '저장' : '등록', onClick: () => {
+      const label = $('#cf-label').value.trim(), start = $('#cf-start').value;
+      const err = !label ? '표시 이름을 입력해주세요.' : !start ? '참여 시작일을 입력해주세요.' : start > today() ? '참여 시작일은 오늘 이후일 수 없습니다.' : '';
+      if (err) { $('#cf-err').textContent = err; (!label ? $('#cf-label') : $('#cf-start')).focus(); return false; }
+      const meta = { status: $('#cf-status').value, start, worker: $('#cf-worker').value.trim(), memo: $('#cf-memo').value.trim() };
+      if (c) { c.label = label; c.meta = { ...c.meta, ...meta }; save(); }
+      else { newCase(label, meta); state.tab = 'process'; }
+      render(); flash(c ? '수정됨' : '등록됨');
+    },
+  }]);
+  setTimeout(() => $('#cf-label').focus(), 50);
 }
 
 // ---------- 1. 진행과정 ----------
@@ -237,7 +274,7 @@ function bindFields(root, d, onChange) {
     if (el.tagName === 'TEXTAREA' && el.closest('.grid')) autoGrow(el);
   });
   $$('[data-addrow]', root).forEach(b => b.onclick = () => {
-    const f = INTRO_SCHEMA.flatMap(s => s.fields).find(x => x.id === b.dataset.addrow);
+    const f = INTRO_SCHEMA.flatMap(s => s.fields).concat(storyFields(state.storyYear)).find(x => x.id === b.dataset.addrow);
     d[f.id + '__n'] = (d[f.id + '__n'] || f.rows) + 1; save(); render();
   });
   $$('[data-polish]', root).forEach(b => b.onclick = (e) => {
@@ -412,11 +449,15 @@ function renderGuide(main) {
   main.innerHTML = `<div class="guide">
     <h2>사용 안내</h2>
     <ol>
-      <li><b>참여자 등록</b> — 상단 [+ 새 참여자]로 등록합니다. 표시 이름은 가명/이니셜을 권장합니다.</li>
+      <li><b>대시보드</b> — 첫 화면에서 참여자 수, 단계별·상태별·성별·장애유형·연령대 분포(원형그래프), 희망영역, 목표 달성도, 참여자별 진행률, 다가오는 일정, 점검이 필요한 참여자를 한눈에 봅니다. 담당자·상태로 거를 수 있습니다.</li>
+      <li><b>참여자 관리</b> — [+ 새 참여자 등록]으로 표시 이름(가명/이니셜 권장)·참여 상태·시작일·담당자를 등록하고, 검색·수정·삭제합니다. 교육 때는 [🧪 가상 예시 데이터]로 연습하세요.</li>
+      <li><b>일정</b> — 달력에서 지원회의·상담·실천활동·평가 일정을 등록합니다. 진행과정에 입력한 단계 진행일도 자동 표시됩니다.</li>
       <li><b>자기소개서</b> — 「행복을 이루기 위한 “나”의 이야기」를 당사자·가족과 함께 영역별로 작성합니다. 입력 즉시 자동 저장됩니다.</li>
       <li><b>실천계획서</b> — [✨ 자기소개서로 AI 초안 만들기]로 꿈과 희망·중장기목표·영역별 단기목표 초안을 만들고, 지원회의를 거쳐 다듬습니다. API 키가 없으면 [AI 없이 초안 채우기]를 사용하세요.</li>
       <li><b>진행과정</b> — 준비 → 계획(지원회의) → 실천 → 평가 단계별 진행일과 회의 메모를 기록합니다.</li>
+      <li><b>행복한 미래 이야기</b> — 연 1회 「지난해 돌아보기 · 올해 달라진 정보 확인하기 · 올해 행복한 삶 실천하기」 서식을 연도별로 작성합니다.</li>
       <li><b>평가</b> — 활동평가(월/분기/반기)와 연 1회 실천과정 평가를 기록하고, AI로 평가 초안을 만듭니다.</li>
+      <li><b>글자 크기</b> — 상단 [가− / 가 / 가+]로 화면 글자 크기를 바꿉니다.</li>
       <li><b>출력</b> — 각 화면의 [🖨 인쇄 / PDF] 또는 [📄 .doc] 버튼으로 내려받아 한글(HWP)·워드에서 열 수 있습니다.</li>
     </ol>
     <h3>무료 AI 사용 방법</h3>
@@ -442,8 +483,12 @@ function renderGuide(main) {
 // ---------- 출력 ----------
 function introDocHTML(c) {
   const d = c.intro;
-  const body = INTRO_SCHEMA.map(sec => {
-    const rows = sec.fields.map(f => {
+  const body = INTRO_SCHEMA.map(sec => `<h2>【 ${esc(sec.title)} 】</h2><table class="doc">${fieldsDocRows(sec.fields, d)}</table>`).join('');
+  return `<h1>평생과정설계 자기소개서</h1><p class="sub">행복을 이루기 위한 “나”의 이야기 — 《 ${esc(d.name || c.label)} 》의 이야기</p>${body}`;
+}
+
+function fieldsDocRows(fields, d) {
+  return fields.map(f => {
       if (f.type === 'heading') return `<tr><td colspan="2" class="h">${esc(f.text)}</td></tr>`;
       if (f.type === 'grid') {
         const n = f.rowLabels ? f.rowLabels.length : (d[f.id + '__n'] || f.rows);
@@ -457,10 +502,7 @@ function introDocHTML(c) {
         return `<tr><th>${esc(f.label)}</th><td>${f.options.map(o => `${sel.includes(o) ? '■' : '□'} ${esc(o)}`).join('&nbsp;&nbsp; ')}${d[f.id + '__etc'] ? ` (${esc(d[f.id + '__etc'])})` : ''}</td></tr>`;
       }
       return `<tr><th>${esc(f.label)}</th><td>${esc(d[f.id]).replace(/\n/g, '<br>')}</td></tr>`;
-    }).join('');
-    return `<h2>【 ${esc(sec.title)} 】</h2><table class="doc">${rows}</table>`;
   }).join('');
-  return `<h1>평생과정설계 자기소개서</h1><p class="sub">행복을 이루기 위한 “나”의 이야기 — 《 ${esc(d.name || c.label)} 》의 이야기</p>${body}`;
 }
 
 function planDocHTML(c) {
@@ -527,32 +569,37 @@ function openSettings() {
 function openDataMenu() {
   const c = cur();
   modal('데이터 관리', `
-    <p>모든 기록은 이 브라우저에만 저장됩니다. 정기적으로 백업 파일을 저장해두세요.</p>
+    <p>모든 기록은 <b>이 PC의 이 브라우저에만</b> 저장됩니다. 자동 동기화·암호화가 되지 않으니 정기적으로 백업 파일을 저장해 기관 보안 저장소에 보관하세요.</p>
+    <p class="muted small">마지막 백업: ${esc(lastBackup() || '기록 없음')}</p>
     <div class="btn-col">
-      <button class="ghost" id="d-rename">✏ 참여자 표시 이름 바꾸기</button>
+      <button class="ghost" id="d-rename">✏ 현재 참여자 정보 수정</button>
       <button class="ghost" id="d-export">💾 전체 백업 파일 저장 (.json)</button>
       <label class="ghost btn-like">📂 백업 파일 불러오기<input type="file" id="d-import" accept=".json,application/json" hidden></label>
       <button class="ghost danger" id="d-delete">🗑 이 참여자 삭제</button>
     </div>`);
-  $('#d-rename').onclick = () => { if (!c) return; const n = prompt('표시 이름', c.label); if (n) { c.label = n.trim(); save(); render(); $('#modal').close(); } };
+  $('#d-rename').onclick = () => { if (c) setTimeout(() => openCaseForm(c), 50); else $('#modal').close(); };
   $('#d-export').onclick = () => {
     const blob = new Blob([JSON.stringify({ app: 'ppp', version: 1, exported: new Date().toISOString(), cases: state.cases }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `평생과정설계_백업_${new Date().toISOString().slice(0, 10)}.json`; a.click();
+    try { localStorage.setItem('ppp_last_backup', new Date().toISOString()); } catch {}
+    flash('백업 파일 저장됨');
   };
   $('#d-import').onchange = async (e) => {
     const file = e.target.files[0]; if (!file) return;
     try {
+      if (file.size > 20 * 1024 * 1024) throw new Error('파일이 너무 큽니다(20MB 초과).');
       const data = JSON.parse(await file.text());
-      const list = Array.isArray(data.cases) ? data.cases : [];
+      if (data?.app !== 'ppp') throw new Error('이 앱에서 만든 백업 파일이 아닙니다.');
+      const list = (Array.isArray(data.cases) ? data.cases : []).filter(x => x && typeof x === 'object' && typeof x.id === 'string' && typeof x.label === 'string');
       if (!list.length) throw new Error('참여자 데이터가 없습니다.');
-      let added = 0;
+      const same = list.filter(x => state.cases.some(y => y.id === x.id)).length;
+      if (!confirm(`백업 파일(${(data.exported || '').slice(0, 10)})에서 ${list.length}명을 불러옵니다.\n- 새로 추가: ${list.length - same}명\n- 같은 참여자 덮어쓰기: ${same}명\n계속할까요?`)) return;
       list.forEach(x => {
-        if (!x || typeof x !== 'object' || !x.id) return;
+        normalizeCase(x);
         const i = state.cases.findIndex(y => y.id === x.id);
         if (i >= 0) state.cases[i] = x; else state.cases.push(x);
-        added++;
       });
-      state.currentId = list[0].id; save(); render(); $('#modal').close(); flash(`${added}명 불러옴`);
+      state.currentId = list[0].id; save(); render(); $('#modal').close(); flash(`${list.length}명 불러옴`);
     } catch (err) { alert('불러오기 실패: ' + err.message); }
   };
   $('#d-delete').onclick = () => {
@@ -570,6 +617,26 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#add-case').onclick = addCase;
   $('#open-settings').onclick = openSettings;
   $('#open-data').onclick = openDataMenu;
-  if (!state.cases.length) state.tab = 'guide';
+  $$('[data-font]').forEach(b => b.onclick = () => setFontSize(b.dataset.font));
+  initFontSize();
   render();
 });
+
+function lastBackup() {
+  try { const v = localStorage.getItem('ppp_last_backup'); return v ? v.slice(0, 10) : ''; } catch { return ''; }
+}
+
+// ---------- 글자 크기 ----------
+const FONT_STEPS = [0.9, 1, 1.15, 1.3];
+function initFontSize() {
+  let z = 1; try { z = +localStorage.getItem('ppp_font') || 1; } catch {}
+  applyFont(FONT_STEPS.includes(z) ? z : 1);
+}
+function setFontSize(dir) {
+  const curZ = +(document.body.dataset.zoom || 1);
+  const i = FONT_STEPS.indexOf(curZ);
+  const z = dir === 'reset' ? 1 : FONT_STEPS[Math.max(0, Math.min(FONT_STEPS.length - 1, i + (dir === 'up' ? 1 : -1)))];
+  applyFont(z); try { localStorage.setItem('ppp_font', z); } catch {}
+  flash(`글자 크기 ${Math.round(z * 100)}%`);
+}
+function applyFont(z) { document.body.dataset.zoom = z; document.body.style.zoom = z; }

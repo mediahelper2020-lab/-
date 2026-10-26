@@ -3,26 +3,36 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>평생과정설계 도우미</title>
-  <meta name="description" content="발달장애인 평생과정설계(PPP) 자기소개서·미래설계 실천계획서 작성 웹앱 (무료 AI 지원)">
+  <title>평생과정설계 기록관리</title>
+  <meta name="description" content="발달장애인 평생과정설계(PPP) 참여자 기록·진행관리·통계 대시보드 웹앱">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <header class="top">
-    <div class="brand">🌱 <b>평생과정설계 도우미</b><small>PPP 자기소개서 · 실천계획서</small></div>
+    <div class="brand">🌱 <b>평생과정설계 기록관리</b><small>클로드복지관 · PPP 참여자 기록 · 자기소개서 · 실천계획서</small></div>
     <div class="case-bar">
       <label for="case-select" class="sr">참여자 선택</label>
       <select id="case-select"></select>
       <button id="add-case" class="primary small">+ 새 참여자</button>
       <button id="open-data" class="ghost small">데이터 관리</button>
       <button id="open-settings" class="ghost small">⚙ AI 설정 <span id="ai-status"></span></button>
+      <span class="font-ctl" role="group" aria-label="글자 크기">
+        <button class="ghost small" data-font="down" aria-label="글자 작게">가−</button>
+        <button class="ghost small" data-font="reset" aria-label="글자 기본 크기">가</button>
+        <button class="ghost small" data-font="up" aria-label="글자 크게">가+</button>
+      </span>
     </div>
     <nav class="tabs">
+      <button class="tab" data-tab="dashboard">📊 대시보드</button>
+      <button class="tab" data-tab="people">👥 참여자 관리</button>
+      <button class="tab" data-tab="calendar">📅 일정</button>
+      <span class="tab-sep" aria-hidden="true"></span>
       <button class="tab" data-tab="process">① 진행과정</button>
       <button class="tab" data-tab="intro">② 자기소개서</button>
       <button class="tab" data-tab="plan">③ 실천계획서</button>
-      <button class="tab" data-tab="eval">④ 평가</button>
+      <button class="tab" data-tab="story">④ 행복한 미래 이야기</button>
+      <button class="tab" data-tab="eval">⑤ 평가</button>
       <button class="tab" data-tab="guide">사용안내</button>
     </nav>
   </header>
@@ -39,5 +49,8 @@
   <script src="js/schema.js"></script>
   <script src="js/ai.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/records.js"></script>
+  <script src="js/sample.js"></script>
 </body>
 </html>

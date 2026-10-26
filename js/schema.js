@@ -282,3 +282,23 @@ const PROCESS = [
     ],
   },
 ];
+
+// 「《 》의 행복한 미래 이야기」 (연간 돌아보기 · 달라진 정보 · 행복한 삶 실천하기) — 한글 원본 서식
+// 연도는 기록마다 다르므로 제목에서 {prev}(돌아보는 해), {year}(올해)로 치환
+const STORY_CHANGE_ITEMS = [
+  { id: 'dream', label: '나의 꿈' },
+  { id: 'strength', label: '나의 강점' },
+  { id: 'energy', label: '나를 힘나게 하는 것' },
+  { id: 'hard', label: '나를 힘들게 하는 것' },
+  { id: 'people', label: '나와 함께 하고 있는 사람들' },
+  { id: 'health', label: '나의 건강' },
+  { id: 'home', label: '나의 거주공간 (집)' },
+  { id: 'day', label: '나의 하루', week: true },
+  { id: 'family', label: '보호자 (가족) 지원' },
+  { id: 'etc', label: '기타' },
+];
+const STORY_SCORE = [1, 2, 3, 4, 5];
+
+// 참여자 관리용 메타 정보 (서식 외 기관 관리 항목)
+const CASE_STATUS = ['진행중', '보류', '종결', '자조활동 연계'];
+const EVENT_KINDS = ['지원회의', '상담', '실천활동', '활동평가', '실천과정 평가', '자조모임', '가족지원', '기타'];
