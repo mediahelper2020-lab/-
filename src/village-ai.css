@@ -223,3 +223,5 @@
  .ai-guide th{width:42%;font-weight:700;color:#4c5b45}.ai-guide tr.bad th,.ai-guide tr.bad td:first-child{color:#a3402c}.ai-guide tr.ok td:first-child{color:#2c6a45}
  .ai-guide ul{margin:4px 0 0;padding-left:18px}
 }
+
+@media screen{mark.ai-sug{background:#efe9fd;color:#5a3fb0;border-radius:4px;padding:0 3px;font-weight:700}mark.ai-chk{background:#fde9d9;color:#9a4a1c;border-radius:4px;padding:0 3px;font-weight:700}}

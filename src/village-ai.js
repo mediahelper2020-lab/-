@@ -488,6 +488,7 @@ async function run({title,prompt,render,apply,applyLabel='적용하기',extraBut
   if(b&&apply){const r=apply(view,b.hasAttribute('data-apply2')?'fill':'all',runDlg);if(r!==false){runDlg.close();if(r!=='quiet')toast('AI 작성 내용을 넣었다. 꼭 읽고 고친다.');}}
  };
 }
+function markAI(v){return e(v).replace(/\((제안)\)/g,'<mark class="ai-sug">(제안)</mark>').replace(/\((확인 필요[^)]*)\)/g,'<mark class="ai-chk">($1)</mark>');}
 function parseJSON(text){const m=String(text).match(/\{[\s\S]*\}/);if(!m)throw new Error('JSON 없음');return JSON.parse(m[0]);}
 
 /* ----- 개인정보를 뺀 기록 요약 ----- */
@@ -509,6 +510,15 @@ const STAGE_HINT={2:'사전회의: 꿈과 히스토리를 공유한다. 꿈과 �
 function domField(k){return $(`#formArea [data-key="${CSS.escape(k)}"]`);}
 function setField(k,v){const el=domField(k);if(!el)return false;el.value=v;fire(el);return true;}
 
+/* 계획서(지침 적용) 외의 AI 작성: 짧게 적어도 모든 칸을 상세하게 채운다. 근거 없는 내용은 (제안)/(확인 필요)로 구분한다. */
+const FILL_ALL=`[상세 작성 규칙 — 모든 칸 채우기]
+- 입력이 짧아도 양식의 모든 서술형 칸을 빠짐없이, 상세하게 채운다. 칸마다 2~4문장(또는 "- "로 시작하는 3줄 이상)으로 쓴다.
+- 기록에 직접 근거가 있는 내용은 그대로 살려 쓴다.
+- 기록에서 합리적으로 이어지는 내용, 발달장애인 평생과정설계 현장에서 흔히 쓰는 지원 방식, 지원회의에서 확인할 질문을 활용해 빈 부분을 채운다. 이렇게 추론·제안한 문장은 끝에 "(제안)"을 붙인다.
+- 사실 정보(장애 진단명·병명·약물·검사 결과·금액·날짜·연락처·주소·가족 구성원의 구체적 사실)는 지어내지 않는다. 모르면 "(확인 필요)"라고 쓰고, 무엇을 확인할지 적는다. 예: "복용 중인 약 이름 (확인 필요 — 보호자에게 확인)".
+- 선택지가 있는 칸(버튼·목록)은 기록에 근거가 있을 때만 선택하고, 없으면 ""로 둔다.
+- 당사자를 존중하는 말로 쓰고, 능력 부족으로 단정하지 않는다. 당사자 표현과 가족·지원자 의견은 구분한다.`;
+
 function aiCounseling(){
  const names=currentNames(),v=Object.assign({},state.forms?.[1]||{},collect());
  const body=summarize(v,names,k=>k.startsWith('ai_'));
@@ -520,7 +530,8 @@ function aiCounseling(){
 ③ 필요한 지원과 환경
 ④ 8개 영역(교육·보건의료·문화여가·직업·결혼·관계·주거·법적지원·소득재정)별 희망과 지원 방향
 ⑤ 지원회의에서 당사자에게 더 확인할 질문 5개
-각 항목에는 근거가 된 기록을 짧게 함께 쓴다.
+각 항목마다 "- "로 시작하는 3~6줄로 상세하게 쓰고, 근거가 된 기록을 괄호로 함께 적는다. ④는 8개 영역을 하나도 빼지 않고 모두 쓴다.
+기록이 적어도 모든 항목을 채운다. 기록에서 추론하거나 제안한 내용은 끝에 "(제안)", 확인이 필요한 사실은 "(확인 필요)"를 붙인다. 진단·약물·금액 같은 사실은 지어내지 않는다.
 
 [상담 기록]
 ${body}`;
@@ -609,9 +620,10 @@ function aiFollowup(){
  const evaluation=activePhase==='evaluation',names=currentNames(),bucket=state[activePhase]||{};
  const plan=summarize(bucket.plan||{},names,k=>/^(hope|note)_/.test(k));
  const rec=summarize(collect(),names,k=>k==='overall');
- if(!rec){toast('영역별 기록을 먼저 작성해야 한다.','warn');return;}
+ if(!rec&&!plan){toast('계획이나 영역별 기록을 한 칸이라도 먼저 작성해야 한다.','warn');return;}
  const prompt=evaluation?`평생과정설계 모니터링 기록을 바탕으로 「종합의견과 다음 지원회의에서 논의할 사항」을 쓴다.
 ① 영역별 실천 여부와 삶의 변화 요약 ② 잘된 점과 어려웠던 점 ③ 유지·조정이 필요한 목표 ④ 다음 지원회의 논의 안건 순서로 쓴다.
+①은 8개 영역(${domains.join('·')})을 모두 쓰고, 각 항목은 "- "로 시작하는 3줄 이상으로 상세하게 쓴다. 기록이 적은 영역은 확인할 점과 제안을 쓰고 끝에 "(제안)" 또는 "(확인 필요)"를 붙인다.
 
 [계획]
 ${plan}
@@ -619,6 +631,7 @@ ${plan}
 [모니터링 기록]
 ${rec}`:`평생과정설계 실천 기록을 바탕으로 「주요 성과와 추가 지원이 필요한 사항」을 쓴다.
 ① 영역별 주요 실천과 당사자 반응 ② 성과 ③ 어려움과 추가로 필요한 지원 ④ 다음 실천 제안 순서로 쓴다.
+①은 8개 영역(${domains.join('·')})을 모두 쓰고, 각 항목은 "- "로 시작하는 3줄 이상으로 상세하게 쓴다. 기록이 적은 영역은 확인할 점과 제안을 쓰고 끝에 "(제안)" 또는 "(확인 필요)"를 붙인다.
 
 [계획]
 ${plan}
@@ -647,7 +660,7 @@ function summarizePerson(name,p,btn){
  const ev=summarize(s.evaluation?.form||{},names);if(ev)parts.push('[모니터링]\n'+ev);
  const prompt=`평생과정설계 진행 상황을 담당 사회복지사가 한눈에 볼 수 있게 요약한다.
 완료 단계: ${TRACK.filter((t,i)=>p.done[i]).join(', ')||'없음'} / 다음 단계: ${p.next}
-① 지금까지의 진행 (3줄) ② 당사자의 꿈과 핵심 목표 ③ 잘 되고 있는 것 ④ 살펴볼 점 ⑤ 다음에 할 일 3가지 순서로, 짧게 쓴다.
+① 지금까지의 진행 ② 당사자의 꿈과 핵심 목표 ③ 잘 되고 있는 것 ④ 살펴볼 점 ⑤ 다음에 할 일 3가지 순서로 쓴다. 각 항목은 "- "로 시작하는 3줄 이상으로 상세하게 쓰고, 기록에 없는 추론은 "(제안)", 확인할 사실은 "(확인 필요)"를 붙인다.
 
 ${parts.join('\n\n')||'(기록 없음)'}`;
  cardDlg.close();
@@ -729,7 +742,7 @@ function setFormValue(k,v){
 }
 function aiNarrative(model){
  const nEl=domField('narrative');const text=(nEl?.value||'').trim();
- if(text.length<20){toast('대상자에 대한 내용을 서술형으로 조금 더 적어준다. (20자 이상)','warn');nEl?.focus();return;}
+ if(text.length<5){toast('대상자에 대한 내용을 한두 문장이라도 적어준다.','warn');nEl?.focus();return;}
  const names=currentNames(),spec=formSpec();
  if(!spec.length){toast('채울 양식을 찾지 못했다.','warn');return;}
  const intro=activePhase==='counseling'?'':summarize(state.forms?.[1]||{},names,k=>k.startsWith('ai_'));
@@ -740,7 +753,7 @@ function aiNarrative(model){
 아래 [서술형 기록]은 담당 사회복지사가 대상자에 대해 자유롭게 쓴 글이다. 이 내용을 양식의 각 칸에 맞게 나누어 정리한다.
 
 규칙:
-- 서술형 기록과 참고 기록에 있는 내용만 쓴다. 근거가 없는 칸은 빈 문자열("")로 둔다. 지어내지 않는다.
+${activePhase==='plan'?'- 서술형 기록과 참고 기록에 있는 내용만 쓴다. 근거가 없는 칸은 빈 문자열("")로 둔다. 지어내지 않는다.':FILL_ALL}
 - 선택지가 있는 칸은 선택지 중 하나를 글자 그대로 쓰거나 ""로 둔다.
 - 한 칸에 여러 내용이 있으면 줄바꿈으로 나눈다. 실천계획은 "- "로 시작하는 줄로 쓴다.${firstPerson}
 - 반드시 아래 키를 가진 JSON 객체 하나만 출력한다. 다른 설명은 쓰지 않는다.
@@ -754,9 +767,9 @@ ${spec.map(f=>`  "${f.k}": "${f.lbl.replace(/"/g,"'")}${f.options?` (선택: ${f
 }`;
  run({title:`✨ 서술형 → ${formTitle()} 초안`,prompt,model,
   render:t=>{let obj;try{obj=parseJSON(t);}catch(_){return {obj:null,html:`<div class="ai-err">AI 응답을 양식으로 읽지 못했다. 다른 모델로 다시 해본다.</div><textarea class="ai-result">${e(t)}</textarea>`};}
-   const rows=spec.filter(f=>has(obj[f.k])).map(f=>`<tr><th>${e(f.lbl)}</th><td class="old">${e(domField(f.k)?.value||'')||'<i>비어 있음</i>'}</td><td>${e(obj[f.k])}</td></tr>`).join('');
+   const rows=spec.filter(f=>has(obj[f.k])).map(f=>`<tr><th>${e(f.lbl)}</th><td class="old">${e(domField(f.k)?.value||'')||'<i>비어 있음</i>'}</td><td>${markAI(obj[f.k])}</td></tr>`).join('');
    const n=spec.filter(f=>has(obj[f.k])).length;
-   return {obj,html:`${guideReview(obj)}<p class="ai-note" style="margin:0 0 8px">양식 ${spec.length}칸 중 <b>${n}칸</b>을 채웠다. 근거가 없는 칸은 비워 두었다.</p><div class="ai-preview"><table><thead><tr><th>칸</th><th>지금</th><th>AI 초안</th></tr></thead><tbody>${rows||'<tr><td colspan="3">채울 내용을 찾지 못했다. 서술형 기록을 더 자세히 적어본다.</td></tr>'}</tbody></table></div>`};},
+   return {obj,html:`${guideReview(obj)}<p class="ai-note" style="margin:0 0 8px">양식 ${spec.length}칸 중 <b>${n}칸</b>을 채웠다. ${activePhase==='plan'?'근거가 없는 칸은 비워 두었다.':'<mark class="ai-sug">(제안)</mark>은 AI가 제안한 내용, <mark class="ai-chk">(확인 필요)</mark>는 확인할 사실이다.'}</p><div class="ai-preview"><table><thead><tr><th>칸</th><th>지금</th><th>AI 초안</th></tr></thead><tbody>${rows||'<tr><td colspan="3">채울 내용을 찾지 못했다. 서술형 기록을 더 자세히 적어본다.</td></tr>'}</tbody></table></div>`};},
   extraButtons:`<button type="button" class="ai-btn" data-apply2>빈 칸만 채우기</button>`,
   apply:(view,mode)=>{if(!view.obj)return false;let n=0,skip=0;spec.forEach(f=>{const v=view.obj[f.k];if(!has(v))return;const el=domField(f.k);if(!el)return;if(mode==='fill'&&has(el.value))return;if(setFormValue(f.k,v))n++;else skip++;});
    toast(`${n}개 칸에 초안을 넣었다.${skip?` (선택지와 맞지 않아 ${skip}개는 넣지 않음)`:''} 꼭 읽고 고친다.`);return 'quiet';},
