@@ -33,9 +33,13 @@ DB 모드에서는 로그인한 직원만 사용할 수 있고, 모든 테이블
 
 ### ② 스키마 + RLS 적용
 1. 대시보드 → **SQL Editor** → New query
-2. `supabase/migrations/20261026000000_ppp_schema.sql` 내용을 전부 붙여넣고 **Run**
-3. 확인: **Table Editor**에서 `organizations, profiles, cases, audit_logs` 4개 테이블 모두 "RLS enabled" 표시
-   또는 아래 쿼리 결과가 0행이어야 합니다.
+2. 아래 주소를 열어 SQL 전체를 복사(Ctrl+A → Ctrl+C) → SQL Editor에 붙여넣고 **Run**
+   https://raw.githubusercontent.com/mediahelper2020-lab/-/main/supabase/migrations/20261026000000_ppp_schema.sql
+   (GitHub 화면에서 열었다면 파일 오른쪽 위 **Copy raw file** 버튼으로 복사)
+3. 실행이 끝나면 아래 **Results** 창에 4줄짜리 결과표가 나옵니다. 4개 테이블 모두 `RLS 켜짐 = true`, `✅ 설치 완료`면 정상입니다.
+   - 결과표가 안 보이면 SQL Editor 아래쪽 패널을 위로 끌어올리거나 Results 탭을 누르세요.
+   - 빨간 오류가 나오면 오류 문구와 함께 알려주세요. 이 SQL은 여러 번 실행해도 안전합니다.
+   - 따로 확인하려면 아래 쿼리 결과가 0행이어야 합니다.
    ```sql
    select relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;

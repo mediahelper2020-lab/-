@@ -282,3 +282,18 @@ begin
 end $$;
 revoke all on function public.add_member(text, text) from public, anon;
 grant execute on function public.add_member(text, text) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 6. 설치 확인 — 실행 후 아래 결과표가 나오면 정상입니다.
+--    4개 테이블 모두 'RLS 켜짐 = true' 이어야 합니다.
+-- ---------------------------------------------------------------------
+select
+  c.relname as "테이블",
+  c.relrowsecurity as "RLS 켜짐",
+  (select count(*) from pg_policies p where p.schemaname = 'public' and p.tablename = c.relname) as "정책 수",
+  case when c.relrowsecurity then '✅ 설치 완료' else '❌ RLS 꺼짐 — 다시 실행하세요' end as "결과"
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public' and c.relkind = 'r'
+  and c.relname in ('organizations', 'profiles', 'cases', 'audit_logs')
+order by c.relname;
