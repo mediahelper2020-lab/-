@@ -70,19 +70,29 @@
 - 마이그레이션: 필드 추가 시 `normalizeCase()`에 기본값 추가. 구조 변경 시 `version`을 올리고 변환 함수 작성.
 - 보존기간·파기 기준: **검증 필요**(기관 지침·관련 법령 확인 후 기재).
 
-## 5. 서버 DB 설계안 (별도 설계 필요 — 미구현)
-지침서의 저장 방식은 "서버 DB"이나 호스팅 주체·인증·개인정보 처리 승인이 확정되지 않아 현재는 브라우저 저장으로 구현했다. 아래는 제안이며 확정 전 검토가 필요하다.
+## 5. Supabase DB (구현됨 — `supabase/migrations/20261026000000_ppp_schema.sql`)
+`js/config.js`에 Supabase URL·anon 키를 넣으면 DB 모드로 동작한다. 설정 절차는 `SUPABASE_SETUP.md`.
 
-| 테이블 | 주요 컬럼 |
+### 5-1. 테이블 (모두 RLS enabled)
+| 테이블 | 주요 컬럼 | 비고 |
+|---|---|---|
+| organizations | id uuid, name(1~100자), created_at | 기관. SQL Editor에서만 생성 |
+| profiles | id(=auth.users.id), org_id, role(admin/manager/worker/viewer/pending), display_name(≤30) | 가입 시 트리거로 pending 생성 |
+| cases | id text(4~32, 영문소문자·숫자), org_id, label(1~30), status(4종), assigned_to, is_sample, data jsonb(<2MB), version, created_by/at, updated_by/at | `data` = 앱 Case 구조(id·label·sample 제외) |
+| audit_logs | id, org_id, user_id, case_id, action(insert/update/delete), at | 내용 미기록, 트리거로만 기록 |
+
+### 5-2. 함수·트리거
+| 이름 | 역할 |
 |---|---|
-| users | id, name, role(admin/worker/viewer), org_id |
-| cases | id, org_id, label, status, start_date, worker_id, created_at, updated_at, deleted_at |
-| case_forms | case_id, form_type(intro/plan/story), year, data(JSONB), updated_by, updated_at |
-| process_steps | case_id, step_id, done, date, memo |
-| evaluations | case_id, kind(activity/year), date, data(JSONB) |
-| events | id, case_id, kind, date, time, title, memo, done |
-| audit_logs | id, user_id, case_id, action, at |
+| private.my_org_id(), private.my_role() | RLS용 현재 사용자 기관·역할 (security definer, API 비노출 스키마) |
+| on_auth_user_created | 가입 시 profiles(pending) 생성 |
+| guard_profile | 본인 역할·기관 변경 차단, 역할 변경은 같은 기관 관리자만 |
+| guard_case | org_id·created_by 서버 강제, version +1, 담당자는 같은 기관 승인 직원만 |
+| log_case | 등록·수정·삭제 접근 기록 |
+| public.add_member(email, role) | 관리자가 가입 직원을 기관에 추가 |
 
-- 후보: Vercel 서버리스 함수 + 관리형 PostgreSQL(예: Supabase) — 검증 필요
-- 필수: 로그인, 역할별 권한(담당자는 본인 담당 참여자만 수정), 행 단위 접근 통제, 전송·저장 암호화, 접근 기록
-- 프론트 전환: `load()/save()`를 저장소 어댑터로 분리해 localStorage ↔ API 교체
+### 5-3. 동기화 규칙 (`js/cloud.js`)
+- 로그인 후 권한 범위의 `cases` 전체를 불러와 `state.cases`로 사용(localStorage에 저장하지 않음)
+- 저장 시 마지막 동기화 상태와 비교해 변경된 참여자만: 신규 → insert, 기존 → `update … where id = ? and version = ?`, 목록에서 사라진 참여자 → delete
+- 0행 갱신(버전 불일치·권한 없음) → 알림 후 DB에서 다시 불러옴(덮어쓰기 방지)
+- 백업 JSON 형식은 로컬 모드와 동일(`app:'ppp'`)

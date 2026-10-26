@@ -1,16 +1,18 @@
-// 평생과정설계 웹앱 — 참여자별 데이터는 브라우저 localStorage에 저장
+// 평생과정설계 웹앱 — 참여자별 데이터는 Supabase DB(설정 시) 또는 브라우저 localStorage에 저장
 const STORE_KEY = 'ppp_cases_v1';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => (s ?? '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const uid = () => Math.random().toString(36).slice(2, 10);
+const uid = () => (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : Date.now().toString(36) + Math.random().toString(36).slice(2)).slice(0, 12);
 
 const state = { cases: [], currentId: null, tab: 'dashboard', introSection: 0, storyYear: new Date().getFullYear() };
 const today = () => new Date().toISOString().slice(0, 10);
 
 // ---------- 저장소 ----------
 function load() {
-  try { state.cases = JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch { state.cases = []; }
+  // DB 모드에서는 개인정보를 이 브라우저에 남기지 않음 (cloud.js가 state.cases를 채움)
+  if (Cloud.enabled()) state.cases = Cloud.cases || [];
+  else try { state.cases = JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch { state.cases = []; }
   state.cases.forEach(normalizeCase);
   try { state.currentId = localStorage.getItem(STORE_KEY + '_cur'); } catch {}
   if (!state.cases.find(c => c.id === state.currentId)) state.currentId = state.cases[0]?.id || null;
@@ -20,9 +22,10 @@ function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(state.cases));
-      localStorage.setItem(STORE_KEY + '_cur', state.currentId || '');
       const c = cur(); if (c) c.updated = new Date().toISOString();
+      localStorage.setItem(STORE_KEY + '_cur', state.currentId || '');
+      if (Cloud.enabled()) return Cloud.sync();
+      localStorage.setItem(STORE_KEY, JSON.stringify(state.cases));
       flash('저장됨');
     } catch (e) { alert('저장 공간이 부족하거나 저장할 수 없습니다: ' + e.message); }
   }, 300);
@@ -86,20 +89,21 @@ function renderHeader() {
   $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === state.tab));
   $('#ai-status').textContent = AI.provider() === 'free' ? '● 무료 AI' : AI.hasKey() ? '● Gemini' : '○ 키 없음';
   $('#ai-status').className = AI.hasKey() ? 'ok' : 'off';
+  Cloud.renderBadge();
 }
 
 function render() {
   renderHeader();
   const main = $('#main');
   if (state.tab === 'guide') return renderGuide(main);
-  if (state.tab === 'dashboard') return renderDashboard(main);
-  if (state.tab === 'people') return renderPeople(main);
-  if (state.tab === 'calendar') return renderCalendar(main);
+  const shared = { dashboard: renderDashboard, people: renderPeople, calendar: renderCalendar }[state.tab];
+  if (shared) { shared(main); return Cloud.applyReadOnly(main); }
   if (!cur()) {
     main.innerHTML = `<div class="empty"><h2>참여자를 먼저 등록해주세요</h2><p>참여자별로 자기소개서, 실천계획서, 진행과정이 따로 저장됩니다.</p><button class="primary" id="first-case">+ 새 참여자 등록</button></div>`;
     $('#first-case').onclick = addCase; return;
   }
   ({ process: renderProcess, intro: renderIntro, plan: renderPlan, story: renderStory, eval: renderEval })[state.tab](main);
+  Cloud.applyReadOnly(main);
 }
 
 function addCase() { openCaseForm(); }
@@ -113,7 +117,7 @@ function openCaseForm(c) {
       <label class="f"><span>표시 이름 <b class="req">*</b></span><input id="cf-label" maxlength="30" value="${esc(c?.label || '')}" placeholder="예: 김OO, A님" required aria-describedby="cf-err"></label>
       <label class="f"><span>참여 상태</span><select id="cf-status">${CASE_STATUS.map(s => `<option ${m.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select></label>
       <label class="f"><span>참여 시작일 <b class="req">*</b></span><input id="cf-start" type="date" value="${esc(m.start || '')}" required></label>
-      <label class="f"><span>담당 사회복지사</span><input id="cf-worker" maxlength="20" value="${esc(m.worker || '')}" placeholder="예: 홍길동"></label>
+      ${Cloud.enabled() ? Cloud.assigneeField(m) : `<label class="f"><span>담당 사회복지사</span><input id="cf-worker" maxlength="20" value="${esc(m.worker || '')}" placeholder="예: 홍길동"></label>`}
       <label class="f wide"><span>관리 메모</span><textarea id="cf-memo" rows="2" maxlength="300">${esc(m.memo || '')}</textarea></label>
     </div>
     <p id="cf-err" class="err" role="alert"></p>`, [{
@@ -121,7 +125,7 @@ function openCaseForm(c) {
       const label = $('#cf-label').value.trim(), start = $('#cf-start').value;
       const err = !label ? '표시 이름을 입력해주세요.' : !start ? '참여 시작일을 입력해주세요.' : start > today() ? '참여 시작일은 오늘 이후일 수 없습니다.' : '';
       if (err) { $('#cf-err').textContent = err; (!label ? $('#cf-label') : $('#cf-start')).focus(); return false; }
-      const meta = { status: $('#cf-status').value, start, worker: $('#cf-worker').value.trim(), memo: $('#cf-memo').value.trim() };
+      const meta = { status: $('#cf-status').value, start, memo: $('#cf-memo').value.trim(), ...(Cloud.enabled() ? Cloud.readAssignee() : { worker: $('#cf-worker').value.trim() }) };
       if (c) { c.label = label; c.meta = { ...c.meta, ...meta }; save(); }
       else { newCase(label, meta); state.tab = 'process'; }
       render(); flash(c ? '수정됨' : '등록됨');
@@ -569,7 +573,8 @@ function openSettings() {
 function openDataMenu() {
   const c = cur();
   modal('데이터 관리', `
-    <p>모든 기록은 <b>이 PC의 이 브라우저에만</b> 저장됩니다. 자동 동기화·암호화가 되지 않으니 정기적으로 백업 파일을 저장해 기관 보안 저장소에 보관하세요.</p>
+    ${Cloud.enabled() ? '<p>기록은 <b>기관 Supabase DB</b>에 저장되며, 역할(RLS 권한)에 따라 볼 수 있는 범위가 다릅니다. 백업 파일은 암호화되지 않으니 기관 보안 저장소에만 보관하세요.</p>'
+      : '<p>모든 기록은 <b>이 PC의 이 브라우저에만</b> 저장됩니다. 자동 동기화·암호화가 되지 않으니 정기적으로 백업 파일을 저장해 기관 보안 저장소에 보관하세요.</p>'}
     <p class="muted small">마지막 백업: ${esc(lastBackup() || '기록 없음')}</p>
     <div class="btn-col">
       <button class="ghost" id="d-rename">✏ 현재 참여자 정보 수정</button>
@@ -607,20 +612,23 @@ function openDataMenu() {
     if (!confirm(`「${c.label}」의 모든 기록을 삭제할까요? 되돌릴 수 없습니다.`)) return;
     state.cases = state.cases.filter(x => x.id !== c.id); state.currentId = state.cases[0]?.id || null; save(); render(); $('#modal').close();
   };
+  Cloud.decorateDataMenu();
 }
 
 // ---------- 시작 ----------
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  initFontSize();
+  // DB 모드: 로그인·승인 확인 후 참여자 불러오기 (실패 시 로그인 화면이 대신 표시됨)
+  if (Cloud.enabled() && !(await Cloud.start())) return;
   load();
   $$('.tab').forEach(t => t.onclick = () => { state.tab = t.dataset.tab; render(); window.scrollTo(0, 0); });
   $('#case-select').onchange = e => { state.currentId = e.target.value; save(); render(); };
   $('#add-case').onclick = addCase;
   $('#open-settings').onclick = openSettings;
   $('#open-data').onclick = openDataMenu;
-  $$('[data-font]').forEach(b => b.onclick = () => setFontSize(b.dataset.font));
-  initFontSize();
   render();
 });
+$$('[data-font]').forEach(b => b.onclick = () => setFontSize(b.dataset.font));
 
 function lastBackup() {
   try { const v = localStorage.getItem('ppp_last_backup'); return v ? v.slice(0, 10) : ''; } catch { return ''; }

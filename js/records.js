@@ -40,7 +40,7 @@ function renderPeople(main) {
           <td>${pr.phase}</td>
           <td><div class="pbar"><i style="width:${pr.pct}%"></i></div><small>${pr.pct}%</small></td>
           <td class="c small">${esc((c.updated || '').slice(0, 10))}</td>
-          <td class="c nowrap"><button class="ghost tiny" data-edit="${c.id}">수정</button> <button class="ghost tiny danger" data-del="${c.id}">삭제</button></td>
+          <td class="c nowrap"><button class="ghost tiny" data-edit="${c.id}">수정</button>${Cloud.can('delete') ? ` <button class="ghost tiny danger" data-del="${c.id}">삭제</button>` : ''}</td>
         </tr>`;
       }).join('') || `<tr><td colspan="10" class="c muted">${state.cases.length ? '검색 결과가 없습니다. 검색어나 필터를 바꿔보세요.' : '등록된 참여자가 없습니다. [+ 새 참여자 등록]을 눌러주세요.'}</td></tr>`}</tbody>
     </table></div>`;
