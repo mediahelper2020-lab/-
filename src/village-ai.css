@@ -215,3 +215,11 @@
  .ai-diag{border:1px solid #e0dbea;border-radius:12px;background:#fff;padding:12px 14px;margin-top:10px;font-size:13px;line-height:1.6}
  .ai-diag ol{margin:8px 0 0;padding-left:18px}.ai-diag li{margin:6px 0}.ai-diag li.ok b{color:#2c6a45}.ai-diag li.bad b{color:#a3402c}.ai-diag li span{color:#4d4766;white-space:pre-wrap}
 }
+
+@media screen{
+ .ai-guide{border:1px solid #e7d9b9;background:#fffaf0;border-radius:12px;padding:10px 14px;margin:0 0 12px;font-size:13px}
+ .ai-guide summary{cursor:pointer;font-weight:800;color:#6b5320}
+ .ai-guide table{width:100%;border-collapse:collapse;margin-top:8px}.ai-guide td,.ai-guide th{border-bottom:1px solid #f0e6cf;padding:6px;text-align:left;vertical-align:top}
+ .ai-guide th{width:42%;font-weight:700;color:#4c5b45}.ai-guide tr.bad th,.ai-guide tr.bad td:first-child{color:#a3402c}.ai-guide tr.ok td:first-child{color:#2c6a45}
+ .ai-guide ul{margin:4px 0 0;padding-left:18px}
+}

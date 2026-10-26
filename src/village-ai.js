@@ -529,6 +529,47 @@ ${body}`;
   applyLabel:'분석 결과 칸에 넣기'});
 }
 
+
+/* ----- 미래설계 실천계획서 작성 지침 (src/plan-guide.json) ----- */
+function planGuide(){return window.PPP_PLAN_GUIDE||null;}
+function planGuideBlock(){
+ const g=planGuide();if(!g)return '';
+ const v=collect();
+ const basic=[`작성일: ${v.common_date||'확인 필요'}`,`담당자: ${has(v.common_manager)?'(입력됨)':'확인 필요'}`,`계획기간: ${g.organization_settings?.planning_period||'확인 필요'}`].join(' / ');
+ return `[미래설계 실천계획서 작성 지침 — 반드시 따른다]
+${JSON.stringify(g)}
+
+[이 양식에 맞춘 출력 방법]
+- 기본정보: ${basic} (계획기간이 정해지지 않았으면 중장기목표에 "계획기간: 확인 필요"로 표시한다)
+- plan_dream(꿈과 희망): 당사자의 직접 표현을 가능한 그대로 쓴다. 가족·지원자 의견은 "(가족 의견)"처럼 구분한다. 말하지 않은 희망은 추가하지 않는다.
+- mid_goal(중장기목표): 계획기간을 밝히고, 당사자의 선택·참여, 지역사회 관계와 자원, 생활의 주도성을 담는다.
+- short_N(단기목표): 당사자를 주어로 한 한 문장. 관찰·확인 가능한 변화. 중장기목표와 연결한다.
+- action_N(실천계획): 아래 6줄 형식으로 쓴다. 정보가 없는 부분은 "확인 필요"로 둔다. 횟수·기간·금액·인원을 지어내지 않는다.
+  - 언제·빈도: …
+  - 어디서: …
+  - 무엇을: …
+  - 당사자의 선택·참여: …
+  - 지원 방법: …
+  - 동의·거절·휴식·중단: …
+- note_N(비고): 아래 형식. 담당자와 주요 유의사항을 반드시 적는다.
+  역할 — 당사자: … / 가족: … / 담당자: … / 지역사회·협력기관: …
+  평가 — 확인할 변화: … / 방법: … / 시점: … / 당사자 의견 반영: …
+  유의사항: …
+- 관련 정보가 전혀 없는 생활영역은 short_N, action_N, note_N 모두 ""로 둔다(억지로 채우지 않는다).
+- "_check": 지침의 quality_validation.checks 10개 각각에 대해 {"항목":"…","결과":"적합" 또는 "보완 필요","이유":"…"} 를 담은 배열.
+- "_confirm": 당사자에게 확인이 필요한 사항 목록(문자열 배열).`;
+}
+function guideReview(obj){
+ if(!obj)return '';
+ const chk=Array.isArray(obj._check)?obj._check:[],cf=Array.isArray(obj._confirm)?obj._confirm:[];
+ if(!chk.length&&!cf.length)return '';
+ const bad=chk.filter(c=>String(c['결과']||c.result||'').includes('보완')).length;
+ return `<details class="ai-guide" ${bad||cf.length?'open':''}><summary>📋 지침 품질 점검 — 적합 ${chk.length-bad} · 보완 필요 ${bad}${cf.length?` · 당사자 확인 필요 ${cf.length}건`:''}</summary>
+ ${chk.length?`<table><tbody>${chk.map(c=>{const r=String(c['결과']||c.result||'');return `<tr class="${r.includes('보완')?'bad':'ok'}"><td>${r.includes('보완')?'⚠':'✔'}</td><th>${e(c['항목']||c.item||'')}</th><td>${e(c['이유']||c.reason||'')}</td></tr>`;}).join('')}</tbody></table>`:''}
+ ${cf.length?`<p><b>당사자 확인이 필요한 사항</b></p><ul>${cf.map(x=>`<li>${e(typeof x==='string'?x:JSON.stringify(x))}</li>`).join('')}</ul>`:''}
+ <p class="ai-note">점검 결과는 양식에 넣지 않는다. 지원회의에서 확인할 때 참고한다.</p></details>`;
+}
+
 function aiPlan(){
  const n=activeStep,names=currentNames();
  const intro=summarize(state.forms?.[1]||{},names,k=>k==='ai_prompt');
@@ -545,18 +586,20 @@ ${intro||'(없음)'}
 [현재 계획서에 적힌 내용]
 ${now||'(없음)'}
 
-규칙:
-- 현재 계획서 내용이 있으면 그 뜻을 살려 다듬고 보완한다.
+${planGuideBlock()||`규칙:
 - 기록에 근거가 없는 영역은 빈 문자열("")로 둔다.
-- 단기목표는 2년 안에 확인할 수 있게, 실천계획은 "- "로 시작하는 2~3줄로 쓴다.
-- 반드시 아래 키만 가진 JSON 객체 하나만 출력한다. 다른 설명은 쓰지 않는다.
+- 단기목표는 2년 안에 확인할 수 있게, 실천계획은 "- "로 시작하는 2~3줄로 쓴다.`}
+
+공통 규칙:
+- 현재 계획서 내용이 있으면 그 뜻을 살려 다듬고 보완한다.
+- 반드시 아래 키를 가진 JSON 객체 하나만 출력한다. 다른 설명은 쓰지 않는다. (N은 영역 번호: ${domains.map((d,i)=>i+'='+d).join(', ')})
 {
-  ${spec}
+  ${spec}${planGuide()?',\n  "_check": [],\n  "_confirm": []':''}
 }`;
  run({title:`✨ AI 계획서 초안 · ${steps[n-1].name}`,prompt,
   render:t=>{let obj;try{obj=parseJSON(t);}catch(_){return {obj:null,html:`<div class="ai-err">AI 응답을 표로 읽지 못했다. 아래 원문을 복사해 쓰거나 다른 모델로 다시 해본다.</div><textarea class="ai-result">${e(t)}</textarea>`};}
    const rows=keys.filter(k=>has(obj[k])).map(k=>`<tr><th>${e(label(k)||k)}</th><td class="old">${e(domField(k)?.value||'')||'<i>비어 있음</i>'}</td><td>${e(obj[k])}</td></tr>`).join('');
-   return {obj,html:`<div class="ai-preview"><table><thead><tr><th>항목</th><th>지금</th><th>AI 초안</th></tr></thead><tbody>${rows||'<tr><td colspan="3">제안된 내용이 없다.</td></tr>'}</tbody></table></div>`};},
+   return {obj,html:`${guideReview(obj)}<div class="ai-preview"><table><thead><tr><th>항목</th><th>지금</th><th>AI 초안</th></tr></thead><tbody>${rows||'<tr><td colspan="3">제안된 내용이 없다.</td></tr>'}</tbody></table></div>`};},
   extraButtons:`<button type="button" class="ai-btn" data-apply2>빈 칸만 채우기</button>`,
   apply:(view,mode)=>{if(!view.obj)return false;let n2=0;keys.forEach(k=>{const v=view.obj[k];if(!has(v))return;const el=domField(k);if(!el)return;if(mode==='fill'&&has(el.value))return;el.value=String(v);fire(el);n2++;});toast(`${n2}개 항목에 넣었다. 꼭 읽고 고친다.`);return 'quiet';},
   applyLabel:'모두 바꾸기'});
@@ -701,19 +744,19 @@ function aiNarrative(model){
 - 선택지가 있는 칸은 선택지 중 하나를 글자 그대로 쓰거나 ""로 둔다.
 - 한 칸에 여러 내용이 있으면 줄바꿈으로 나눈다. 실천계획은 "- "로 시작하는 줄로 쓴다.${firstPerson}
 - 반드시 아래 키를 가진 JSON 객체 하나만 출력한다. 다른 설명은 쓰지 않는다.
-
+${activePhase==='plan'?'\n'+planGuideBlock()+'\n':''}
 [서술형 기록]
 ${scrub(text,names)}
 ${intro?`\n[참고: 상담·자기소개서 기록]\n${intro}\n`:''}${filled?`\n[참고: 지금 양식에 이미 적힌 내용 — 뜻을 살려 보완한다]\n${filled}\n`:''}
 [양식의 칸 — 키: 칸 이름 (선택지)]
 {
-${spec.map(f=>`  "${f.k}": "${f.lbl.replace(/"/g,"'")}${f.options?` (선택: ${f.options.join(' | ')})`:''}"`).join(',\n')}
+${spec.map(f=>`  "${f.k}": "${f.lbl.replace(/"/g,"'")}${f.options?` (선택: ${f.options.join(' | ')})`:''}"`).join(',\n')}${activePhase==='plan'&&planGuide()?',\n  "_check": [],\n  "_confirm": []':''}
 }`;
  run({title:`✨ 서술형 → ${formTitle()} 초안`,prompt,model,
   render:t=>{let obj;try{obj=parseJSON(t);}catch(_){return {obj:null,html:`<div class="ai-err">AI 응답을 양식으로 읽지 못했다. 다른 모델로 다시 해본다.</div><textarea class="ai-result">${e(t)}</textarea>`};}
    const rows=spec.filter(f=>has(obj[f.k])).map(f=>`<tr><th>${e(f.lbl)}</th><td class="old">${e(domField(f.k)?.value||'')||'<i>비어 있음</i>'}</td><td>${e(obj[f.k])}</td></tr>`).join('');
    const n=spec.filter(f=>has(obj[f.k])).length;
-   return {obj,html:`<p class="ai-note" style="margin:0 0 8px">양식 ${spec.length}칸 중 <b>${n}칸</b>을 채웠다. 근거가 없는 칸은 비워 두었다.</p><div class="ai-preview"><table><thead><tr><th>칸</th><th>지금</th><th>AI 초안</th></tr></thead><tbody>${rows||'<tr><td colspan="3">채울 내용을 찾지 못했다. 서술형 기록을 더 자세히 적어본다.</td></tr>'}</tbody></table></div>`};},
+   return {obj,html:`${guideReview(obj)}<p class="ai-note" style="margin:0 0 8px">양식 ${spec.length}칸 중 <b>${n}칸</b>을 채웠다. 근거가 없는 칸은 비워 두었다.</p><div class="ai-preview"><table><thead><tr><th>칸</th><th>지금</th><th>AI 초안</th></tr></thead><tbody>${rows||'<tr><td colspan="3">채울 내용을 찾지 못했다. 서술형 기록을 더 자세히 적어본다.</td></tr>'}</tbody></table></div>`};},
   extraButtons:`<button type="button" class="ai-btn" data-apply2>빈 칸만 채우기</button>`,
   apply:(view,mode)=>{if(!view.obj)return false;let n=0,skip=0;spec.forEach(f=>{const v=view.obj[f.k];if(!has(v))return;const el=domField(f.k);if(!el)return;if(mode==='fill'&&has(el.value))return;if(setFormValue(f.k,v))n++;else skip++;});
    toast(`${n}개 칸에 초안을 넣었다.${skip?` (선택지와 맞지 않아 ${skip}개는 넣지 않음)`:''} 꼭 읽고 고친다.`);return 'quiet';},

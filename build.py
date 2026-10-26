@@ -8,14 +8,16 @@ css = (root / 'src/village-ai.css').read_text(encoding='utf-8')
 js = (root / 'src/village-ai.js').read_text(encoding='utf-8')
 cloud = (root / 'src/cloud.js').read_text(encoding='utf-8')
 v3d = (root / 'src/village3d.js').read_text(encoding='utf-8')
+guide = json.loads((root / 'src/plan-guide.json').read_text(encoding='utf-8'))
+guide_js = 'window.PPP_PLAN_GUIDE=' + json.dumps(guide, ensure_ascii=False).replace('<', '\\u003c') + ';'
 IMPORTMAP = '<script type="importmap" id="village-importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>'
 
 html = re.sub(r'\n?<style id="village-ai-style">.*?</style>', '', html, flags=re.S)
-for sid in ('village-ai-js', 'cloud-js', 'village-3d', 'village-importmap'):
+for sid in ('plan-guide-js', 'village-ai-js', 'cloud-js', 'village-3d', 'village-importmap'):
     html = re.sub(r'\n?<script[^>]*id="' + sid + r'"[^>]*>.*?</script>', '', html, flags=re.S)
 html = html.replace('</head>', f'<style id="village-ai-style">\n{css}</style>\n{IMPORTMAP}\n</head>', 1)
 i = html.rfind('</body>')
-html = (html[:i] + f'<script id="village-ai-js">\n{js}</script>\n<script id="cloud-js">\n{cloud}</script>\n'
+html = (html[:i] + f'<script id="plan-guide-js">\n{guide_js}\n</script>\n' + f'<script id="village-ai-js">\n{js}</script>\n<script id="cloud-js">\n{cloud}</script>\n'
         + f'<script type="module" id="village-3d">\n{v3d}</script>\n' + html[i:])
 
 # 시연 사례(김하니)에 아바타를 입힌다.
