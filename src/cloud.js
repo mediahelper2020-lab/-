@@ -5,7 +5,7 @@
 'use strict';
 const $=(s,r=document)=>r.querySelector(s);
 const STORE='sungminPPP_v2',OWNER='pppCloud_owner',MARK='pppCloud_savedAt',HASH='pppCloud_hash';
-const SUPABASE_JS='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';
+const SUPABASE_JS='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js';
 const toast=(m,t)=>window.uxApp?.toast?window.uxApp.toast(m,t):console.log(m);
 const ls={get:k=>{try{return localStorage.getItem(k)}catch(_){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(_){}},del:k=>{try{localStorage.removeItem(k)}catch(_){}}};
 function h(html){const t=document.createElement('template');t.innerHTML=html.trim();const n=t.content.firstElementChild;n.setAttribute('data-ux','');return n;}
@@ -33,15 +33,15 @@ const gate=h(`<div class="cl-gate" role="dialog" aria-modal="true" aria-labelled
  <div class="cl-err" role="alert"></div>
  <button type="submit" class="primary cl-main">로그인</button>
  <div class="cl-links"><button type="button" data-mode>처음이면 계정 만들기</button><button type="button" data-reset>비밀번호를 잊었다</button></div>
- <p class="cl-note">계정은 기관 관리자가 Supabase에서 만들거나, 가입을 허용한 경우 직접 만든다.</p></form></div>`);
+ <p class="cl-note">계정은 기관 관리자가 Supabase에서 만들거나, 가입을 허용한 경우 직접 만든다.</p><p class="cl-note cl-proj"></p></form></div>`);
 let signup=false;
-function showGate(msg){document.body.append(gate);gate.hidden=false;document.body.classList.add('cl-locked');const f=$('form',gate);$('.cl-err',gate).textContent=msg||'';setTimeout(()=>f.elements.namedItem('email').focus(),50);}
+function showGate(msg){document.body.append(gate);gate.hidden=false;$('.cl-proj',gate).textContent='연결된 Supabase 프로젝트: '+projectRef();document.body.classList.add('cl-locked');const f=$('form',gate);$('.cl-err',gate).textContent=msg||'';setTimeout(()=>f.elements.namedItem('email').focus(),50);}
 function hideGate(){gate.hidden=true;document.body.classList.remove('cl-locked');}
 gate.addEventListener('click',async ev=>{
  const f=$('form',gate),E=k=>f.elements.namedItem(k);
  if(ev.target.closest('[data-mode]')){signup=!signup;$('.cl-main',gate).textContent=signup?'계정 만들기':'로그인';ev.target.textContent=signup?'이미 계정이 있다':'처음이면 계정 만들기';E('password').autocomplete=signup?'new-password':'current-password';return;}
  if(ev.target.closest('[data-reset]')){const email=E('email').value.trim();if(!email){$('.cl-err',gate).textContent='이메일을 먼저 입력한다.';return;}
-  const {error}=await cloud.client.auth.resetPasswordForEmail(email,{redirectTo:location.origin});$('.cl-err',gate).textContent=error?error.message:'비밀번호 재설정 메일을 보냈다. 메일함을 확인한다.';}
+  const {error}=await cloud.client.auth.resetPasswordForEmail(email,{redirectTo:location.origin});$('.cl-err',gate).innerHTML=error?explain(error):'비밀번호 재설정 메일을 보냈다. 메일함을 확인한다.';}
 });
 $('form',gate).addEventListener('submit',async ev=>{
  ev.preventDefault();const f=ev.target,E=k=>f.elements.namedItem(k),err=$('.cl-err',gate),btn=$('.cl-main',gate);
@@ -53,9 +53,22 @@ $('form',gate).addEventListener('submit',async ev=>{
   if(r.error)throw r.error;
   if(signup&&!r.data.session){err.textContent='가입 확인 메일을 보냈다. 메일의 링크를 누른 뒤 로그인한다.';return;}
   E('password').value='';await afterLogin(r.data.session);
- }catch(e){err.textContent=/Invalid login/i.test(e.message)?'이메일 또는 비밀번호가 맞지 않다.':e.message;}
+ }catch(e){err.innerHTML=explain(e);}
  finally{btn.disabled=false;}
 });
+
+function explain(e){
+ const m=String(e?.message||e||''),code=e?.code||'';
+ const proj=projectRef();
+ if(/email.*not.*confirm/i.test(m)||code==='email_not_confirmed')return '<b>이메일 확인이 안 된 계정이다.</b><br>Supabase → Authentication → Users에서 이 계정을 지우고 <b>Auto Confirm User</b>를 체크해서 다시 만든다. (또는 메일함의 확인 링크를 누른다)';
+ if(/invalid login|invalid_credentials/i.test(m)||code==='invalid_credentials')return `<b>이메일 또는 비밀번호가 맞지 않다.</b><br>비밀번호가 맞다면, 계정을 만든 Supabase 프로젝트가 <b>${esc(proj)}</b>인지 확인한다. 다른 프로젝트에 만든 계정으로는 로그인할 수 없다.`;
+ if(/invalid api key|no api key|apikey|jwt|unauthor/i.test(m))return '<b>Supabase 키가 맞지 않다.</b><br>Vercel의 SUPABASE_ANON_KEY에 같은 프로젝트의 <b>anon public</b> 키(eyJ…)를 넣고 Redeploy 한다.';
+ if(/fetch|network|load failed/i.test(m))return '<b>Supabase에 연결하지 못했다.</b><br>SUPABASE_URL 주소가 맞는지, 인터넷이 연결되었는지 확인한다.';
+ if(/rate limit|too many/i.test(m))return '<b>시도가 너무 많았다.</b> 몇 분 뒤 다시 한다.';
+ if(/signups? not allowed|signup.*disabled/i.test(m))return '<b>직접 가입이 꺼져 있다.</b> 관리자가 Supabase에서 계정을 만들어 준다.';
+ return '로그인하지 못했다: '+esc(m);
+}
+function projectRef(){try{return new URL(cloud.config?.supabaseUrl||'').hostname.split('.')[0]||'(알 수 없음)';}catch(_){return '(알 수 없음)';}}
 
 /* ---------- 동기화 ---------- */
 async function pullRow(){const {data,error}=await cloud.client.from('ppp_workspaces').select('data,saved_at').eq('user_id',cloud.user.id).maybeSingle();if(error)throw error;return data;}
