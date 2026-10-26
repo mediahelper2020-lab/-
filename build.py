@@ -4,7 +4,7 @@
 import re, json, pathlib
 root = pathlib.Path(__file__).parent
 html = (root / 'index.html').read_text(encoding='utf-8')
-css = (root / 'src/village-ai.css').read_text(encoding='utf-8')
+css = (root / 'src/village-ai.css').read_text(encoding='utf-8') + '\n' + (root / 'src/ui-polish.css').read_text(encoding='utf-8')
 js = (root / 'src/village-ai.js').read_text(encoding='utf-8')
 cloud = (root / 'src/cloud.js').read_text(encoding='utf-8')
 v3d = (root / 'src/village3d.js').read_text(encoding='utf-8')

@@ -113,7 +113,7 @@ function lights(scene, size = 26) {
 const ZONE3D = [
   { center: [0, 4.6], r: 2.3, building: [0, 1.2], sign: [0, 3.9, 1.2] },        // 마을 광장
   { center: [-7.6, .6], r: 2.0, building: [-11.2, -3.2], sign: [-9.6, 6.6, -1.8] }, // 이야기집
-  { center: [-3.4, -5.4], r: 2.0, building: [-4.6, -10.4], sign: [-4.2, 7.2, -8.6] }, // 회의마루
+  { center: [-3.4, -5.4], r: 2.0, building: [-4.6, -10.4], sign: [-3.6, 5.4, -7.4] }, // 회의마루
   { center: [3.6, -5.4], r: 2.0, building: [5.4, -10.6], sign: [6.6, 4.2, -7.4] },  // 실천 놀이터
   { center: [8, .6], r: 2.0, building: [11.6, -2.6], sign: [10.2, 5.4, -.6] },   // 전망대
 ];
@@ -240,7 +240,7 @@ function createVillage(container, opts = {}) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true; controls.dampingFactor = .07; controls.enablePan = false;
   controls.minDistance = 16; controls.maxDistance = 58; controls.minPolarAngle = .45; controls.maxPolarAngle = 1.2;
-  const HOME_T = new THREE.Vector3(0, 1.4, -2.8), HOME_DIR = new THREE.Vector3(0, 21, 30).normalize(), HOME_D = 38;
+  const HOME_T = new THREE.Vector3(0, 4.2, -2.6), HOME_DIR = new THREE.Vector3(0, 21, 30).normalize(), HOME_D = 38;
   let fitK = 1;
   function resetView() { controls.target.copy(HOME_T); camera.position.copy(HOME_T).addScaledVector(HOME_DIR, HOME_D * fitK); }
   resetView();

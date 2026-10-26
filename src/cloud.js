@@ -26,14 +26,17 @@ function placeChip(){const right=$('.ux-top-right');if(right&&!chip.isConnected)
 chip.addEventListener('click',ev=>{if(ev.target.closest('.cl-out'))signOut();});
 
 /* ---------- 로그인 화면 ---------- */
-const gate=h(`<div class="cl-gate" role="dialog" aria-modal="true" aria-labelledby="clTitle" hidden><form class="cl-card" novalidate>
+const gate=h(`<div class="cl-gate" role="dialog" aria-modal="true" aria-labelledby="clTitle" hidden><div class="cl-card">
+ <aside class="cl-side" aria-hidden="true"><div><span class="ui-logo"><b>G</b></span><h2>나의 바람이<br>일상이 되는 곳</h2><p>당사자의 이야기에서 시작해<br>함께 그리는 평생과정설계</p></div>
+  <ul><li>🏝 3D 마을에서 한눈에 보는 진행 상황</li><li>✨ 서술형 기록으로 만드는 AI 초안</li><li>☁ 어느 기기에서나 이어 쓰는 기록</li></ul></aside>
+ <form class="cl-form" novalidate>
  <div class="cl-logo">🌱</div><h1 id="clTitle">지피티복지관 평생과정설계</h1><p class="cl-sub">기록은 로그인한 계정에 안전하게 저장된다.</p>
  <label>이메일<input name="email" type="email" autocomplete="username" required></label>
  <label>비밀번호<input name="password" type="password" autocomplete="current-password" required minlength="6"></label>
  <div class="cl-err" role="alert"></div>
  <button type="submit" class="primary cl-main">로그인</button>
  <div class="cl-links"><button type="button" data-mode>처음이면 계정 만들기</button><button type="button" data-reset>비밀번호를 잊었다</button></div>
- <p class="cl-note">계정은 기관 관리자가 Supabase에서 만들거나, 가입을 허용한 경우 직접 만든다.</p><p class="cl-note cl-proj"></p></form></div>`);
+ <p class="cl-note">계정은 기관 관리자가 Supabase에서 만들거나, 가입을 허용한 경우 직접 만든다.</p><p class="cl-note cl-proj"></p></form></div></div>`);
 let signup=false;
 function showGate(msg){document.body.append(gate);gate.hidden=false;$('.cl-proj',gate).textContent='연결된 Supabase 프로젝트: '+projectRef();document.body.classList.add('cl-locked');const f=$('form',gate);$('.cl-err',gate).textContent=msg||'';setTimeout(()=>f.elements.namedItem('email').focus(),50);}
 function hideGate(){gate.hidden=true;document.body.classList.remove('cl-locked');}

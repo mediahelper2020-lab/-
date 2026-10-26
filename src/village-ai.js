@@ -162,6 +162,7 @@ function ensureVillage(){
   <div class="vl-wrap"><div class="vl-stage" role="group" aria-label="마을 지도"></div></div>
   <div class="vl-tools"><input type="search" placeholder="이름으로 찾기" aria-label="마을에서 이름 찾기"><label><input type="checkbox" data-act="bubbles"> 말풍선 항상 보기</label><button type="button" class="secondary" data-act="spin" style="padding:6px 12px">🔄 천천히 돌아보기</button><button type="button" class="secondary" data-act="reset" style="padding:6px 12px">⌂ 처음 시점</button><button type="button" class="primary" data-act="fs" style="padding:6px 12px">⛶ 전체화면</button><span style="margin-left:auto">팻말을 누르면 그 장소에 있는 사람만 표시한다</span></div></section>`);
   home.prepend(box);
+  $('.vl-wrap',box).prepend($('.vl-hud',box)); // 제목 패널을 3D 장면 위에 얹는다(전체화면에서도 보임)
   const stage=$('.vl-stage',box);buildStage(stage);
   box.addEventListener('click',ev=>{
    const act=ev.target.closest('[data-act]')?.dataset.act;
@@ -825,6 +826,38 @@ function syncFsUI(){
 document.addEventListener('fullscreenchange',syncFsUI);document.addEventListener('webkitfullscreenchange',syncFsUI);
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){const w=$('#avatarVillage .vl-wrap.vl-pseudo-fs');if(w)setPseudo(w,false);}});
 
+
+/* =====================================================================
+   UI 다듬기: 사이드바 선 아이콘 · 로고 · 메뉴 묶음 이름
+   ===================================================================== */
+const ICONS={
+ home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
+ overview:'<path d="M2 4.5h6.5A3.5 3.5 0 0 1 12 8v12.5a2.5 2.5 0 0 0-2.5-2.5H2z"/><path d="M22 4.5h-6.5A3.5 3.5 0 0 0 12 8v12.5a2.5 2.5 0 0 1 2.5-2.5H22z"/>',
+ counseling:'<path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.4A8.5 8.5 0 1 1 21 11.5z"/><path d="M8.5 10h7M8.5 13.5h4.5"/>',
+ plan:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18 14.3a6.5 6.5 0 0 1 3.5 5.7"/>',
+ practice:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+ evaluation:'<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 6-6"/><path d="M16 8h4v4"/>',
+ users:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+ meetings:'<rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>',
+ resources:'<path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2.5h6.5A2.5 2.5 0 0 1 21 9v8.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/>',
+ reports:'<path d="M5 20V11M11 20V5M17 20v-7M3 20h18"/>',
+ ai:'<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 14.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/>',
+};
+const svgIco=k=>`<span class="ui-ico" data-ux aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg></span>`;
+function polishChrome(){
+ const brand=$('.sidebar .brand');
+ if(brand&&!$('.ui-logo',brand))brand.insertAdjacentHTML('afterbegin',`<span class="ui-logo" data-ux aria-hidden="true"><b>G</b></span>`);
+ $$('.sidebar .nav a').forEach(a=>{
+  if($('.ui-ico',a))return;
+  const key=a.dataset.phase||(a.textContent.includes('AI')?'ai':'');if(!ICONS[key])return;
+  // 앞에 붙은 기호·이모지를 지우고 선 아이콘으로 바꾼다
+  for(const n of [...a.childNodes]){if(n.nodeType===3){n.textContent=n.textContent.replace(/^[^\p{Script=Hangul}A-Za-z]+/u,'');break;}}
+  a.insertAdjacentHTML('afterbegin',svgIco(key));
+ });
+ const nav=$('.sidebar .nav');
+ if(nav&&!$('.ui-navlabel',nav)){nav.insertAdjacentHTML('afterbegin','<div class="ui-navlabel" data-ux>평생과정설계</div>');const hr=$('hr',nav);if(hr)hr.insertAdjacentHTML('afterend','<div class="ui-navlabel" data-ux>관리</div>');}
+}
+
 /* =====================================================================
    7. 기존 화면과 연결
    ===================================================================== */
@@ -845,6 +878,6 @@ navEl?.lastElementChild?.addEventListener('keydown',ev=>{if(ev.key==='Enter')ope
 /* 상단 메뉴에도 추가 */
 const menu=$('#uxMenu');if(menu){const b=h(`<button type="button" role="menuitem">🤖 AI 모델</button>`);b.onclick=()=>{menu.hidden=true;openSettings();};menu.prepend(b);}
 
-renderVillage();refreshAiBar();patchCounselingNotice();
+polishChrome();renderVillage();refreshAiBar();patchCounselingNotice();
 AI.models().then(refreshAiBar);
 })();
