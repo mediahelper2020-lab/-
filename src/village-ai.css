@@ -210,3 +210,8 @@
  .nv-model{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:800;color:#5d5675}
  .nv-model select{min-width:230px;border:1px solid #d8d2e6;border-radius:10px;padding:9px 10px;background:#fff;font:inherit;font-size:14px}
 }
+
+@media screen{
+ .ai-diag{border:1px solid #e0dbea;border-radius:12px;background:#fff;padding:12px 14px;margin-top:10px;font-size:13px;line-height:1.6}
+ .ai-diag ol{margin:8px 0 0;padding-left:18px}.ai-diag li{margin:6px 0}.ai-diag li.ok b{color:#2c6a45}.ai-diag li.bad b{color:#a3402c}.ai-diag li span{color:#4d4766;white-space:pre-wrap}
+}

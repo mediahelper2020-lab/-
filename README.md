@@ -43,6 +43,18 @@ Vercel 프로젝트 → **Settings → Environment Variables** 에 추가하고,
 새 모델이 나오거나 옛 모델이 종료되어도 코드를 고칠 필요가 없습니다. 음성·이미지·임베딩·날짜 고정 버전은 자동으로 뺍니다.
 앱의 **🤖 AI 모델** 화면에서 회사별 연결 상태(키 오류 등)와 「🔄 최신 모델 다시 불러오기」를 쓸 수 있습니다.
 
+
+### ChatGPT(OpenAI)가 안 될 때
+앱의 **🤖 AI 모델 → 🩺 연결 점검**을 누르면 키 형식 → 모델 목록 → 실제 호출 순서로 점검하고 원인을 알려줍니다.
+
+| 점검 결과 | 해결 |
+|---|---|
+| 크레딧(잔액)이 없다 | platform.openai.com → Settings → **Billing**에서 결제수단 등록·크레딧 충전 (ChatGPT Plus 구독과 API 요금은 별개) |
+| API 키가 올바르지 않다 | platform.openai.com/api-keys 에서 새 키 → Vercel `OPENAI_API_KEY` 교체 → Redeploy |
+| 권한이 제한된 키(Restricted) | 새 키를 만들 때 Permissions를 **All**로 |
+| 조직 인증이 필요한 모델 | Settings → Organization → General → **Verify Organization**, 또는 다른 GPT 모델 선택 |
+| 이 키로는 모델을 쓸 수 없다 | 사용량 등급(Tier)이 낮으면 최신 모델이 막힐 수 있음 → 다른 GPT 모델 선택 |
+
 ## 3. 보안 구조
 
 - API 키는 Vercel 서버 함수(`api/`)에만 있고 브라우저·작성본 HTML·백업 파일로 나오지 않습니다.

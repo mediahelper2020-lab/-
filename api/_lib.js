@@ -1,10 +1,11 @@
 // Vercel 서버 함수 공통 — API 키는 Vercel 환경변수에만 있고 브라우저로 보내지 않는다.
 const env = (k) => (process.env[k] || '').trim();
+const keyEnv = (k) => env(k).replace(/^["']|["']$/g, '').replace(/\s+/g, '');
 
 export const KEYS = () => ({
-  openai: env('OPENAI_API_KEY'),
-  gemini: env('GEMINI_API_KEY') || env('GOOGLE_API_KEY') || env('GOOGLE_GENERATIVE_AI_API_KEY'),
-  anthropic: env('ANTHROPIC_API_KEY') || env('CLAUDE_API_KEY'),
+  openai: keyEnv('OPENAI_API_KEY') || keyEnv('CHATGPT_API_KEY'),
+  gemini: keyEnv('GEMINI_API_KEY') || keyEnv('GOOGLE_API_KEY') || keyEnv('GOOGLE_GENERATIVE_AI_API_KEY'),
+  anthropic: keyEnv('ANTHROPIC_API_KEY') || keyEnv('CLAUDE_API_KEY'),
 });
 const PROVIDER_NAME = { openai: 'ChatGPT', gemini: 'Gemini', anthropic: 'Claude' };
 
@@ -121,22 +122,66 @@ export async function requireUser(req) {
   return { user };
 }
 
+/* 회사별 오류를 사회복지사가 이해할 수 있는 말과 해결 방법으로 바꾼다. */
+export function explainError(provider, status, data, model) {
+  const err = data?.error || {};
+  const code = String(err.code || err.type || err.status || '');
+  const msg = String(err.message || data?.message || '');
+  const all = (code + ' ' + msg).toLowerCase();
+  const tag = `[${provider} ${status}${code ? ' ' + code : ''}] ${msg}`.trim();
+  let hint;
+  if (provider === 'openai') {
+    if (/insufficient_quota|exceeded your current quota|billing/.test(all)) hint = 'OpenAI 계정에 크레딧(잔액)이 없다. platform.openai.com → Settings → Billing 에서 결제수단 등록 후 크레딧을 충전한다. (ChatGPT Plus 구독과 API 요금은 별개다)';
+    else if (/invalid_api_key|incorrect api key/.test(all) || status === 401 && !/permission/.test(all)) hint = 'OpenAI API 키가 올바르지 않다. platform.openai.com/api-keys 에서 새 키를 만들어 Vercel의 OPENAI_API_KEY에 다시 넣고 Redeploy 한다.';
+    else if (/insufficient permissions|missing scopes|restricted/.test(all)) hint = '이 키는 권한이 제한된 키(Restricted)다. 새 키를 만들 때 Permissions를 「All」로 선택한다.';
+    else if (/verif/.test(all)) hint = `「${model}」은(는) OpenAI 조직 인증(Verify Organization)이 필요한 모델이다. platform.openai.com → Settings → Organization → General 에서 인증하거나, 다른 GPT 모델을 고른다.`;
+    else if (status === 404 || /model_not_found|does not exist|do not have access/.test(all)) hint = `이 키로는 「${model}」을 쓸 수 없다. 다른 GPT 모델을 고른다. (사용량 등급(Tier)이 낮으면 최신 모델이 막혀 있을 수 있다)`;
+    else if (status === 429) hint = '요청이 너무 많다(사용량 등급 한도). 잠시 후 다시 하거나 다른 모델을 고른다.';
+    else if (status === 400) hint = `「${model}」이 이 요청 형식을 받지 않는다. 다른 GPT 모델을 고른다.`;
+  } else if (provider === 'gemini') {
+    if (/api key not valid|api_key_invalid/.test(all)) hint = 'Gemini API 키가 올바르지 않다. aistudio.google.com/apikey 에서 키를 다시 복사한다.';
+    else if (status === 429 || /quota|resource_exhausted/.test(all)) hint = 'Gemini 사용량 한도를 넘었다. 무료 등급이면 잠시 후 다시 하거나, AI Studio에서 결제를 연결한다. (최신 Pro 모델은 무료 등급에서 막혀 있을 수 있다)';
+    else if (status === 404) hint = `「${model}」을 쓸 수 없다. 다른 Gemini 모델을 고른다.`;
+    else if (/location|region/.test(all)) hint = '이 지역에서 Gemini API를 쓸 수 없다는 응답이다.';
+  } else if (provider === 'anthropic') {
+    if (/credit balance|billing/.test(all)) hint = 'Anthropic 계정 크레딧이 부족하다. console.anthropic.com → Billing 에서 충전한다.';
+    else if (status === 401) hint = 'Claude API 키가 올바르지 않다. console.anthropic.com/settings/keys 에서 새 키를 만들어 넣는다.';
+    else if (status === 404) hint = `「${model}」을 쓸 수 없다. 다른 Claude 모델을 고른다.`;
+    else if (status === 429 || status === 529) hint = 'Claude 사용량 한도이거나 서버가 붐빈다. 잠시 후 다시 한다.';
+  }
+  if (!hint) hint = status === 401 || status === 403 ? 'API 키가 올바르지 않거나 권한이 없다.' : status >= 500 ? `${PROVIDER_NAME[provider] || provider} 서버에 일시적인 문제가 있다. 잠시 후 다시 한다.` : 'AI 호출에 실패했다.';
+  return `${hint}\n${tag}`;
+}
+
+async function openaiResponses(key, model, system, prompt) {
+  const r = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model, instructions: system, input: prompt, store: false }) });
+  const data = await r.json().catch(() => ({}));
+  if (r.ok) {
+    if (data.status === 'incomplete' && !data.output?.length) return { ok: false, status: 502, data: { error: { message: '응답이 중간에 끊겼다: ' + (data.incomplete_details?.reason || '') } } };
+    const text = typeof data.output_text === 'string' && data.output_text ? data.output_text
+      : (data.output || []).filter((o) => o.type === 'message').flatMap((o) => o.content || []).filter((c) => c.type === 'output_text' || c.type === 'text').map((c) => c.text).join('');
+    return { ok: true, text: String(text || '').trim() };
+  }
+  return { ok: false, status: r.status, data };
+}
+async function openaiChat(key, model, system, prompt) {
+  const r = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }] }) });
+  const data = await r.json().catch(() => ({}));
+  if (r.ok) return { ok: true, text: (data.choices?.[0]?.message?.content || '').trim() };
+  return { ok: false, status: r.status, data };
+}
+
 export async function callModel(m, system, prompt) {
   const key = KEYS()[m.provider];
+  if (!key) throw Object.assign(new Error(`${PROVIDER_NAME[m.provider]} API 키가 Vercel에 등록되지 않았다.`), { status: 503 });
   let r, data;
   if (m.provider === 'openai') {
-    r = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: m.model, instructions: system, input: prompt }) });
-    data = await r.json().catch(() => ({}));
-    if (r.ok) {
-      const text = typeof data.output_text === 'string' ? data.output_text
-        : (data.output || []).flatMap((o) => o.content || []).filter((c) => c.type === 'output_text' || c.type === 'text').map((c) => c.text).join('');
-      return String(text || '').trim();
-    }
-    if (r.status === 404 || r.status === 400) { // Responses API를 지원하지 않는 모델이면 예전 방식으로 한 번 더
-      const r2 = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: m.model, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }] }) });
-      const d2 = await r2.json().catch(() => ({}));
-      if (r2.ok) return (d2.choices?.[0]?.message?.content || '').trim();
-    }
+    const a = await openaiResponses(key, m.model, system, prompt);
+    if (a.ok) return a.text;
+    // 키·크레딧 문제가 아니면 예전 방식(Chat Completions)으로 한 번 더 시도한다.
+    const keyProblem = a.status === 401 || /insufficient_quota|invalid_api_key/.test(JSON.stringify(a.data?.error || {}));
+    if (!keyProblem) { const b = await openaiChat(key, m.model, system, prompt); if (b.ok) return b.text; if (a.status === 404 || a.status === 400) { r = { status: b.status }; data = b.data; } }
+    if (!r) { r = { status: a.status }; data = a.data; }
   } else if (m.provider === 'gemini') {
     r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m.model)}:generateContent`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts: [{ text: prompt }] }] }) });
     data = await r.json().catch(() => ({}));
@@ -146,10 +191,27 @@ export async function callModel(m, system, prompt) {
     data = await r.json().catch(() => ({}));
     if (r.ok) return (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
   } else throw Object.assign(new Error('알 수 없는 회사'), { status: 400 });
-  const msg = data?.error?.message || data?.error?.type || r.statusText || '';
-  const hint = r.status === 401 || r.status === 403 ? 'Vercel에 등록한 API 키가 올바르지 않거나 권한이 없다.'
-    : r.status === 404 ? `모델 「${m.model}」을 쓸 수 없다. 이 키의 계정에 해당 모델 권한이 있는지 확인하거나 다른 모델을 고른다.`
-    : r.status === 429 ? '사용량 한도를 넘었거나 결제(크레딧)가 필요하다. 잠시 후 다시 하거나 다른 모델을 고른다.'
-    : 'AI 호출에 실패했다.';
-  throw Object.assign(new Error(`${hint}\n[${m.provider} ${r.status}] ${msg}`), { status: 502 });
+  throw Object.assign(new Error(explainError(m.provider, r.status, data, m.model)), { status: 502 });
+}
+
+/* 연결 점검: 키 형식 → 모델 목록 → 실제 짧은 호출(가벼운 모델부터 최대 3개) */
+const KEY_PREFIX = { openai: /^sk-/, gemini: /^AIza/, anthropic: /^sk-ant-/ };
+export async function diagnose(provider) {
+  const key = KEYS()[provider];
+  const out = { provider, steps: [] };
+  if (!key) { out.steps.push({ name: '키 등록', ok: false, detail: `Vercel 환경변수에 키가 없다. (${{ openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY', anthropic: 'ANTHROPIC_API_KEY' }[provider]})` }); return out; }
+  const raw = process.env[{ openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY', anthropic: 'ANTHROPIC_API_KEY' }[provider]] || '';
+  const fmtOk = KEY_PREFIX[provider].test(key);
+  out.steps.push({ name: '키 형식', ok: fmtOk, detail: fmtOk ? `${key.slice(0, 6)}… (${key.length}자)${raw !== raw.trim() || /["'\s]/.test(raw.trim()) ? ' · 앞뒤 공백/따옴표는 자동으로 지웠다' : ''}` : `키가 ${KEY_PREFIX[provider].source.replace(/[\^\\/]/g, '')}로 시작하지 않는다. 다른 회사 키나 잘못 복사한 값일 수 있다.` });
+  let list = [];
+  try { list = await discoverers[provider](key); out.steps.push({ name: '모델 목록', ok: list.length > 0, detail: list.length ? `대화형 모델 ${list.length}개 확인 (예: ${list.slice(0, 4).map((m) => m.model).join(', ')})` : '쓸 수 있는 대화형 모델이 없다.' }); }
+  catch (err) { out.steps.push({ name: '모델 목록', ok: false, detail: err.message }); return out; }
+  const light = /(mini|nano|flash|haiku|lite|luna)/i;
+  const order = [...list.filter((m) => light.test(m.model)), ...list.filter((m) => !light.test(m.model))].slice(0, 3);
+  for (const m of order) {
+    const t0 = Date.now();
+    try { const text = await callModel({ ...m, id: `${provider}:${m.model}` }, '짧게 답한다.', 'OK라고만 답한다.'); out.steps.push({ name: `호출 · ${m.model}`, ok: true, detail: `${Date.now() - t0}ms · 응답 "${text.slice(0, 20)}"` }); break; }
+    catch (err) { out.steps.push({ name: `호출 · ${m.model}`, ok: false, detail: err.message }); if (/키가 올바르지|크레딧|잔액|Restricted/.test(err.message)) break; }
+  }
+  return out;
 }

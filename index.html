@@ -619,6 +619,11 @@ body.followup-mode .layout{display:block}
  .nv-model{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:800;color:#5d5675}
  .nv-model select{min-width:230px;border:1px solid #d8d2e6;border-radius:10px;padding:9px 10px;background:#fff;font:inherit;font-size:14px}
 }
+
+@media screen{
+ .ai-diag{border:1px solid #e0dbea;border-radius:12px;background:#fff;padding:12px 14px;margin-top:10px;font-size:13px;line-height:1.6}
+ .ai-diag ol{margin:8px 0 0;padding-left:18px}.ai-diag li{margin:6px 0}.ai-diag li.ok b{color:#2c6a45}.ai-diag li.bad b{color:#a3402c}.ai-diag li span{color:#4d4766;white-space:pre-wrap}
+}
 </style>
 <script type="importmap" id="village-importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
 </head>
@@ -2009,7 +2014,8 @@ async function openSettings(refresh){
  const models=await AI.models(refresh===true?true:true);
  const byP=Object.keys(PROVIDERS).map(p=>({p,st:AI.providers[p]||{}}));
  setDlg.innerHTML=`<h2>🤖 AI 모델</h2><p class="ai-note" style="margin:0">API 키는 <b>Vercel 환경변수</b>에만 저장되어 브라우저로 나오지 않는다. AI 작성 버튼을 누를 때마다 아래 모델 중에서 고른다.</p>
- <div class="ai-set-sec"><h3>연결 상태</h3><table class="ai-list"><tbody>${byP.map(x=>`<tr><td><span class="ai-prov" data-p="${x.p}">${PROVIDERS[x.p].short}</span><b>${PROVIDERS[x.p].name}</b></td><td>${x.st.ok?`<b style="color:#2c6a45">● 사용 가능 · 모델 ${x.st.count}개</b>`:x.st.configured?`<b style="color:#a3402c">● 오류</b><br><small class="ai-note">${e(x.st.error||'')}</small>`:`<span class="ai-note">키 없음 · <code>${PROVIDERS[x.p].env}</code></span>`}</td></tr>`).join('')}</tbody></table>
+ <div class="ai-set-sec"><h3>연결 상태</h3><table class="ai-list"><tbody>${byP.map(x=>`<tr><td><span class="ai-prov" data-p="${x.p}">${PROVIDERS[x.p].short}</span><b>${PROVIDERS[x.p].name}</b></td><td>${x.st.ok?`<b style="color:#2c6a45">● 사용 가능 · 모델 ${x.st.count}개</b>`:x.st.configured?`<b style="color:#a3402c">● 오류</b><br><small class="ai-note">${e(x.st.error||'')}</small>`:`<span class="ai-note">키 없음 · <code>${PROVIDERS[x.p].env}</code></span>`}</td><td><button type="button" data-diag="${x.p}">🩺 연결 점검</button></td></tr>`).join('')}</tbody></table>
+ <div data-diag-out></div>
  <button type="button" class="secondary" data-refresh style="margin-top:10px">🔄 최신 모델 다시 불러오기</button>
  ${AI.error?`<div class="ai-err" style="margin-top:10px">${e(AI.error)}</div>`:''}</div>
  <div class="ai-set-sec"><h3>사용할 수 있는 모델 (${models.length}개) · 각 회사에서 최신 목록을 자동으로 받아온다</h3><table class="ai-list"><tbody>${models.map(m=>`<tr><td><span class="ai-prov" data-p="${m.provider}">${PROVIDERS[m.provider]?.short||m.provider}</span><b>${e(m.label)}</b><br><small class="ai-note">${e(m.model)}${m.id===AI.defaultId?' · ★ 기본':''}</small></td><td><button type="button" data-test-id="${e(m.id)}">연결 테스트</button></td></tr>`).join('')||'<tr><td class="ai-note">아직 없다.</td></tr>'}</tbody></table>
@@ -2026,6 +2032,15 @@ async function openSettings(refresh){
   const t=ev.target;
   if(t===setDlg||t.closest('[data-close]')){setDlg.close();return;}
   if(t.closest('[data-refresh]')){openSettings(true);return;}
+  const dp=t.closest('[data-diag]')?.dataset.diag;
+  if(dp){const out=$('[data-diag-out]',setDlg);out.innerHTML=`<div class="ai-status"><span class="ai-spin"></span>${PROVIDERS[dp].short} 연결을 점검하는 중… (최대 1분)</div>`;
+   try{const token=await window.PPPCloud?.token?.();if(!token)throw new Error('점검하려면 로그인이 필요하다.');
+    const r=await fetch('/api/diagnose?provider='+dp,{headers:{Authorization:'Bearer '+token},cache:'no-store'});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('점검 실패 '+r.status));
+    const ok=d.steps.length&&d.steps[d.steps.length-1].ok;
+    out.innerHTML=`<div class="ai-diag"><b>${PROVIDERS[dp].name} 점검 결과 — ${ok?'<span style="color:#2c6a45">✅ 정상 연결</span>':'<span style="color:#a3402c">❌ 문제 있음</span>'}</b><ol>${d.steps.map(st=>`<li class="${st.ok?'ok':'bad'}"><b>${st.ok?'✔':'✖'} ${e(st.name)}</b><br><span>${e(st.detail).replace(/\n/g,'<br>')}</span></li>`).join('')}</ol></div>`;
+    if(ok)AI.models(true);
+   }catch(err){out.innerHTML=`<div class="ai-err">${e(err.message)}</div>`;}
+   return;}
   const tid=t.closest('[data-test-id]')?.dataset.testId;
   if(tid){const m=models.find(x=>x.id===tid),out=$('[data-test]',setDlg);out.innerHTML=`<div class="ai-status"><span class="ai-spin"></span>${e(m.label)} 연결 확인 중…</div>`;
    try{const r=await AI.call(m,'"연결 성공"이라고만 답한다.');out.innerHTML=`<p style="color:#2c6a45;font-weight:800">✅ ${e(m.label)} 연결 성공 — ${e(r.slice(0,60))}</p>`;}
