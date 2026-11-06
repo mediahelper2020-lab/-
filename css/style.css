@@ -254,3 +254,10 @@ button:focus-visible, .tab:focus-visible, .cal-cell:focus-visible { outline: 3px
 .auth-box .fields { grid-template-columns: 1fr; }
 .ro-note { margin: 0 0 16px; }
 input:disabled, textarea:disabled, select:disabled { background: #f1f3f5 !important; color: #55616c; cursor: not-allowed; }
+.demo-box { margin-top: 24px; padding-top: 4px; border-top: 1px dashed var(--line); }
+.demo-row { display: flex; gap: 8px; }
+.demo-row input { flex: 1; border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; }
+.cloud-badge.demo b { color: #ffd38a; }
+[hidden] { display: none !important; }
+.auth-box .btn-row.f { flex-direction: row; justify-content: flex-start; margin: 0; }
+.auth-box .err:empty { display: none; }

@@ -165,7 +165,7 @@ function renderDashboard(main) {
   const upcoming = events.filter(e => e.date >= today() && daysBetween(today(), e.date) <= 30 && !e.done).slice(0, 8);
   const checks = list.map(c => ({ c, why: needsCheck(c) })).filter(x => x.why);
   const lb = lastBackup();
-  const backupWarn = !lb || daysBetween(lb, today()) > 14;
+  const backupWarn = !Cloud.demo && (!lb || daysBetween(lb, today()) > 14);
 
   // 집계
   const phaseData = countBy(list, c => prog.get(c.id).phase, ['시작 전', ...PHASES, '평가 완료']);

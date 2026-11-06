@@ -10,9 +10,10 @@ const Cloud = {
 
   config() {
     const c = window.PPP_CONFIG || {};
-    return { url: (c.supabaseUrl || '').trim(), key: (c.supabaseAnonKey || '').trim(), idle: +c.idleLogoutMinutes || 30 };
+    return { url: (c.supabaseUrl || '').trim(), key: (c.supabaseAnonKey || '').trim(), idle: +c.idleLogoutMinutes || 30, demoKey: String(c.demoKey ?? '').trim() };
   },
-  enabled() { const c = this.config(); return !!(c.url && c.key); },
+  demo: false, // 체험 모드(관리자 키): DB 미연결, 가상 데이터만
+  enabled() { const c = this.config(); return !this.demo && !!(c.url && c.key); },
   role() { return this.profile?.role || 'pending'; },
   can(action) {
     if (!this.enabled()) return true;
@@ -131,6 +132,14 @@ const Cloud = {
   setStatus(s) { this.status = s; this.renderBadge(); },
   renderBadge() {
     let el = $('#cloud-badge');
+    if (this.demo) {
+      if (!el) { el = document.createElement('span'); el.id = 'cloud-badge'; $('.case-bar').prepend(el); }
+      el.className = 'cloud-badge demo';
+      el.innerHTML = '<span>🧪 체험 모드</span><b>가상 데이터 · 저장 안 됨</b>';
+      if (!$('#demo-exit')) $('.case-bar').insertAdjacentHTML('beforeend', '<button class="ghost small" id="demo-exit">체험 끝내기</button>');
+      $('#demo-exit').onclick = () => location.reload();
+      return;
+    }
     if (!this.enabled()) { el?.remove(); return; }
     if (!el) {
       el = document.createElement('span'); el.id = 'cloud-badge';
@@ -238,6 +247,15 @@ const Cloud = {
     this.sync().then(() => { if (this.status === 'ok') { try { localStorage.removeItem(STORE_KEY); } catch {} flash('DB로 옮겼습니다'); render(); } });
   },
 
+  // 체험 모드: DB 연결 없이 메모리에만 가상 데이터를 올려 전체 화면을 보여줌
+  startDemo() {
+    this.demo = true;
+    $('.tabs').hidden = false; $('.case-bar').hidden = false;
+    state.tab = 'dashboard';
+    bootApp();
+    loadSampleData();
+  },
+
   // ---------- 자동 로그아웃 ----------
   watchIdle() {
     const reset = () => {
@@ -271,7 +289,18 @@ const Cloud = {
         <label class="f wide"><span>비밀번호</span><input id="lg-pw" type="password" autocomplete="current-password" required></label>
         <p id="lg-err" class="err f wide" role="alert"></p>
         <div class="btn-row f wide"><button class="primary" type="submit">로그인</button><button class="ghost" type="button" id="lg-reset">비밀번호를 잊었어요</button></div>
-      </form>`);
+      </form>
+      ${this.config().demoKey ? `<form id="demo-form" class="demo-box" novalidate>
+        <h3 class="fh">체험하기 (관리자 키)</h3>
+        <p class="muted small">관리자 키를 넣으면 로그인 없이 <b>가상 예시 데이터</b>로 모든 화면을 둘러볼 수 있습니다. DB에는 연결되지 않으며, 입력한 내용은 저장되지 않습니다.</p>
+        <div class="demo-row"><label class="sr" for="demo-key">관리자 키</label><input id="demo-key" type="password" inputmode="numeric" autocomplete="off" placeholder="관리자 키" aria-describedby="demo-err"><button class="ghost" type="submit">체험 시작</button></div>
+        <p id="demo-err" class="err" role="alert"></p>
+      </form>` : ''}`);
+    $('#demo-form')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if ($('#demo-key').value.trim() !== this.config().demoKey) { $('#demo-err').textContent = '관리자 키가 맞지 않습니다.'; $('#demo-key').select(); return; }
+      this.startDemo();
+    });
     const err = (m, el) => { $('#lg-err').textContent = m; el?.focus(); };
     $('#lg-email').focus();
     $('#login-form').onsubmit = async (e) => {

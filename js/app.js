@@ -12,6 +12,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 function load() {
   // DB 모드에서는 개인정보를 이 브라우저에 남기지 않음 (cloud.js가 state.cases를 채움)
   if (Cloud.enabled()) state.cases = Cloud.cases || [];
+  else if (Cloud.demo) state.cases = [];
   else try { state.cases = JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch { state.cases = []; }
   state.cases.forEach(normalizeCase);
   try { state.currentId = localStorage.getItem(STORE_KEY + '_cur'); } catch {}
@@ -23,8 +24,9 @@ function save() {
   saveTimer = setTimeout(() => {
     try {
       const c = cur(); if (c) c.updated = new Date().toISOString();
-      localStorage.setItem(STORE_KEY + '_cur', state.currentId || '');
+      if (!Cloud.demo) localStorage.setItem(STORE_KEY + '_cur', state.currentId || '');
       if (Cloud.enabled()) return Cloud.sync();
+      if (Cloud.demo) return; // 체험 모드: 가상 데이터는 어디에도 저장하지 않음
       localStorage.setItem(STORE_KEY, JSON.stringify(state.cases));
       flash('저장됨');
     } catch (e) { alert('저장 공간이 부족하거나 저장할 수 없습니다: ' + e.message); }
@@ -620,6 +622,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   initFontSize();
   // DB 모드: 로그인·승인 확인 후 참여자 불러오기 (실패 시 로그인 화면이 대신 표시됨)
   if (Cloud.enabled() && !(await Cloud.start())) return;
+  bootApp();
+});
+
+// 화면 시작 (DB 로그인 후 또는 체험 모드 진입 시)
+function bootApp() {
   load();
   $$('.tab').forEach(t => t.onclick = () => { state.tab = t.dataset.tab; render(); window.scrollTo(0, 0); });
   $('#case-select').onchange = e => { state.currentId = e.target.value; save(); render(); };
@@ -627,7 +634,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#open-settings').onclick = openSettings;
   $('#open-data').onclick = openDataMenu;
   render();
-});
+}
 $$('[data-font]').forEach(b => b.onclick = () => setFontSize(b.dataset.font));
 
 function lastBackup() {
